@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-sky-50 text-gray-800 antialiased;
+  }
+}
+
+@layer components {
+  /* Markdownレンダリング用スタイル */
+  .prose-air h1 { @apply text-2xl font-bold text-gray-800 mt-8 mb-4; }
+  .prose-air h2 { @apply text-xl font-bold text-gray-800 mt-6 mb-3; }
+  .prose-air h3 { @apply text-lg font-semibold text-gray-700 mt-5 mb-2; }
+  .prose-air p  { @apply text-gray-700 leading-relaxed mb-4; }
+  .prose-air a  { @apply text-sky-500 hover:text-sky-700 underline; }
+  .prose-air ul { @apply list-disc list-inside mb-4 space-y-1 text-gray-700; }
+  .prose-air ol { @apply list-decimal list-inside mb-4 space-y-1 text-gray-700; }
+  .prose-air blockquote {
+    @apply border-l-4 border-sky-300 pl-4 italic text-gray-500 my-4;
+  }
+  .prose-air code {
+    @apply bg-sky-50 text-sky-700 text-sm px-1.5 py-0.5 rounded font-mono;
+  }
+  .prose-air pre {
+    @apply bg-gray-900 text-gray-100 rounded-xl p-4 overflow-x-auto my-4;
+  }
+  .prose-air pre code {
+    @apply bg-transparent text-gray-100 p-0;
+  }
+  .prose-air hr { @apply border-sky-100 my-6; }
+  .prose-air img { @apply rounded-xl max-w-full my-4; }
+  .prose-air table { @apply w-full border-collapse my-4; }
+  .prose-air th { @apply bg-sky-50 text-left p-2 border border-sky-200 font-semibold; }
+  .prose-air td { @apply p-2 border border-sky-100; }
+}
