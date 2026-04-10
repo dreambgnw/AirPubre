@@ -68,6 +68,37 @@ function Select({ value, onChange, options }) {
   )
 }
 
+/** 生成サイトのテーマ配色プレビュー */
+const THEME_PREVIEWS = {
+  wordpress: { bg: '#ffffff', fg: '#1f2937', accent: '#2563eb', muted: '#6b7280', card: '#f9fafb', label: 'WordPress' },
+  obsidian:  { bg: '#111827', fg: '#e5e7eb', accent: '#38bdf8', muted: '#9ca3af', card: '#1f2937', label: 'Obsidian' },
+  word:      { bg: '#f9fafb', fg: '#111827', accent: '#1d4ed8', muted: '#4b5563', card: '#ffffff', label: 'Word' },
+  markdown:  { bg: '#030712', fg: '#4ade80', accent: '#22c55e', muted: '#86efac', card: '#0b1220', label: 'Markdown' },
+}
+function ThemePreview({ theme }) {
+  const p = THEME_PREVIEWS[theme] ?? THEME_PREVIEWS.wordpress
+  return (
+    <div
+      className="mt-2 rounded-xl overflow-hidden border border-sky-100 shadow-sm"
+      style={{ background: p.bg }}
+    >
+      <div className="px-3 py-2 text-[10px] font-mono" style={{ color: p.muted, borderBottom: `1px solid ${p.card}` }}>
+        {p.label.toLowerCase()}.example.com
+      </div>
+      <div className="p-4 space-y-2">
+        <div className="h-3 w-3/4 rounded-full" style={{ background: p.accent, opacity: 0.9 }} />
+        <div className="h-2 w-1/2 rounded-full" style={{ background: p.fg, opacity: 0.35 }} />
+        <div className="h-24 rounded-lg mt-2 p-3 space-y-1.5" style={{ background: p.card }}>
+          <div className="h-1.5 w-full rounded-full" style={{ background: p.fg, opacity: 0.5 }} />
+          <div className="h-1.5 w-5/6 rounded-full" style={{ background: p.fg, opacity: 0.3 }} />
+          <div className="h-1.5 w-4/6 rounded-full" style={{ background: p.fg, opacity: 0.3 }} />
+          <div className="h-1.5 w-20 rounded-full mt-2" style={{ background: p.accent }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** パスワード入力（表示/非表示トグル付き） */
 function SecretInput({ value, onChange, placeholder }) {
   const [show, setShow] = useState(false)
@@ -382,7 +413,7 @@ export default function Settings() {
             ]}
           />
         </Field>
-        <Field label="サイトテーマ" hint="生成されるサイトのデザインテーマ">
+        <Field label="サイトテーマ" hint="生成されるサイトと管理画面のデザインテーマ">
           <Select
             value={config.background ?? 'wordpress'}
             onChange={(v) => { applyAdminTheme(v); set('background')(v) }}
@@ -393,6 +424,7 @@ export default function Settings() {
               { value: 'markdown',  label: 'Markdown — モノスペース・コードライク' },
             ]}
           />
+          <ThemePreview theme={config.background ?? 'wordpress'} />
         </Field>
       </Section>
 

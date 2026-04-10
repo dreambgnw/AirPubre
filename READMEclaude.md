@@ -266,13 +266,14 @@ SSH/rsync 設定の表示のみ（実行は手動）。
 
 ## 残タスク（低優先）
 
-- [ ] Obsidian `==highlight==` の builder.js 出力対応（`<mark>` タグへの変換）
-- [ ] Obsidian `[[wikilink]]` の builder.js 出力対応（相対リンクへの変換）
-- [ ] 生成サイトのテーマプレビュー（管理画面内）
-- [ ] 著者ページ Markdown カスタマイズ（フリー記述エリア追加）
-- [ ] チャンクサイズ最適化（TipTap + @xenova/transformers が重い、dynamic import 分割）
+- [x] Obsidian `==highlight==` の builder.js 出力対応（`preprocessObsidian` として実装済み）
+- [x] Obsidian `[[wikilink]]` の builder.js 出力対応（`preprocessObsidian` として実装済み）
+- [x] 生成サイトのテーマプレビュー（Settings 内 `ThemePreview` として実装済み）
+- [x] 著者ページ Markdown カスタマイズ（`authorBioMarkdown` として実装済み）
+- [x] チャンクサイズ最適化（tiptap/transformers/markdown/vendor に manualChunks 分割、RichTextEditor/worker は動的 import 済み）
 - [x] ヘッドレス CMS モード（`headless-github` として実装済み）
 - [x] WordPress `scheduledAt` のビルド時判定（headless モードでは frontmatter date に丸投げ → サーバー側で未来日を非公開にする）
+- [x] 管理画面テーマ追従（`applyAdminTheme` + `html[data-theme]` + CSS 変数）
 
 ---
 
