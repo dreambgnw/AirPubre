@@ -48,10 +48,18 @@ async function listMarkdownFiles({ owner, repo, branch, dir, token }) {
 /**
  * 1ファイルの raw 内容を取得
  */
+/**
+ * 1ファイルの raw 内容を取得
+ */
 async function fetchRaw({ owner, repo, branch, path, token }) {
-  const url = `${RAW_BASE}/${owner}/${repo}/${branch}/${path}`
+  // ✅ GitHub API を使う (CORS エラーなし)
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`
   const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      'Accept': 'application/vnd.github.raw', // ← これで raw content が取れる
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      'X-GitHub-Api-Version': '2022-11-28',
+    }
   })
   if (!res.ok) throw new Error(`raw fetch failed: ${path} (${res.status})`)
   return res.text()
