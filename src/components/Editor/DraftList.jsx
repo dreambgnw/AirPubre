@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, PenLine, Clock, Globe, Upload, CheckCircle, Loader2 } from 'lucide-react'
-import { getDrafts, deleteDraft, getSiteConfig, saveDraft, getSyncCredential } from '../../lib/storage.js'
+import { getDrafts, deleteDraft, getSiteConfig, saveDraft, getSyncCredential, addPendingDeletion, getPendingDeletions } from '../../lib/storage.js'
 import { buildSite, buildManifest } from '../../lib/builder.js'
 import { buildSyncFiles } from '../../lib/sync.js'
 import { deployToGitHub } from '../../lib/deploy/github.js'
@@ -30,6 +30,8 @@ function DeploySelectModal({ onClose }) {
   const [deployResult, setDeployResult] = useState(null)
   const [deployError, setDeployError] = useState(null)
   const [targetLabel, setTargetLabel] = useState('ZIPダウンロード')
+  const [pendingDeletions, setPendingDeletions] = useState([])
+  const [isHeadless, setIsHeadless] = useState(false)
 
   useEffect(() => {
     getDrafts().then(drafts => {
@@ -40,7 +42,9 @@ function DeploySelectModal({ onClose }) {
     })
     getSiteConfig().then(cfg => {
       setTargetLabel(DEPLOY_TARGET_LABELS[cfg.deployTarget] ?? 'ZIPダウンロード')
+      setIsHeadless(cfg.deployTarget === 'headless-github')
     })
+    getPendingDeletions().then(setPendingDeletions)
   }, [])
 
   const toggleAll = () => {
@@ -185,7 +189,7 @@ function DeploySelectModal({ onClose }) {
         {/* 記事選択 */}
         {deployState === 'select' && (
           <>
-            {publishedDrafts.length === 0 ? (
+            {publishedDrafts.length === 0 && !(isHeadless && pendingDeletions.length > 0) ? (
               <p className="text-sm text-gray-400 py-4 text-center">
                 掲載済みの記事がないよ。<br />
                 記事を開いて「下書き完了」を押してね。
@@ -270,18 +274,34 @@ function DeploySelectModal({ onClose }) {
                   })}
                 </div>
 
+                {/* 削除待ちの通知（headless モードのみ） */}
+                {isHeadless && pendingDeletions.length > 0 && (
+                  <div className="text-xs bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 text-rose-700">
+                    <p className="font-semibold mb-1">🗑 削除伝播あり: {pendingDeletions.length} 件</p>
+                    <p className="text-rose-600/80 font-mono truncate">
+                      {pendingDeletions.slice(0, 3).map(p => p.slug).join(', ')}
+                      {pendingDeletions.length > 3 && ` 他 ${pendingDeletions.length - 3} 件`}
+                    </p>
+                    <p className="text-rose-500/80 mt-1">次回プッシュ時に GitHub リポからも削除されるよ</p>
+                  </div>
+                )}
+
                 {/* manifest.json の説明 */}
-                <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                  ZIPには選んだ記事のHTMLと <span className="font-mono text-gray-600">manifest.json</span>（slug ↔ パス対応表）が含まれるよ。
-                </p>
+                {!isHeadless && (
+                  <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                    ZIPには選んだ記事のHTMLと <span className="font-mono text-gray-600">manifest.json</span>（slug ↔ パス対応表）が含まれるよ。
+                  </p>
+                )}
 
                 <button
                   onClick={handleDeploy}
-                  disabled={selected.size === 0}
+                  disabled={selected.size === 0 && !(isHeadless && pendingDeletions.length > 0)}
                   className="w-full flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
                 >
                   <Upload className="w-4 h-4" />
-                  {selected.size} 件でサイトを更新
+                  {selected.size > 0
+                    ? `${selected.size} 件でサイトを更新`
+                    : `${pendingDeletions.length} 件の削除を同期`}
                 </button>
               </>
             )}
@@ -379,6 +399,7 @@ export default function DraftList({ onOpen, refreshKey }) {
   const [drafts, setDrafts]       = useState([])
   const [loading, setLoading]     = useState(true)
   const [showDeploy, setShowDeploy] = useState(false)
+  const [pendingDeletionCount, setPendingDeletionCount] = useState(0)
 
   useEffect(() => {
     setLoading(true)
@@ -386,12 +407,35 @@ export default function DraftList({ onOpen, refreshKey }) {
       setDrafts(d)
       setLoading(false)
     })
-  }, [refreshKey])
+    getPendingDeletions().then(p => setPendingDeletionCount(p.length))
+  }, [refreshKey, showDeploy])
 
   const handleDelete = async (id, e) => {
     e.stopPropagation()
     if (!confirm('この下書きを削除しますか？')) return
+    const draft = drafts.find(x => x.id === id)
     await deleteDraft(id)
+
+    // headless モードでデプロイ済みの記事だった場合、次回プッシュで GitHub からも消す
+    const cfg = await getSiteConfig()
+    if (cfg.deployTarget === 'headless-github' && draft?.slug && draft?.lastDeployedAt) {
+      let thumbnailFilename = null
+      if (draft.thumbnail) {
+        // buildHeadlessFiles と同じ命名ロジック（slug 最終セグメント + 拡張子）
+        const baseName = draft.slug.split('/').pop().replace(/[^\w\-]/g, '_')
+        if (draft.thumbnail.startsWith('data:')) {
+          const m = /^data:image\/([a-z]+);/.exec(draft.thumbnail)
+          const ext = m ? (m[1] === 'jpeg' ? 'jpg' : m[1]) : 'webp'
+          thumbnailFilename = `${baseName}.${ext}`
+        } else if (/^https?:\/\//.test(draft.thumbnail)) {
+          thumbnailFilename = draft.thumbnail.split('/').pop()
+        } else {
+          thumbnailFilename = draft.thumbnail
+        }
+      }
+      await addPendingDeletion({ slug: draft.slug, thumbnailFilename })
+    }
+
     setDrafts(d => d.filter(x => x.id !== id))
   }
 
@@ -426,13 +470,18 @@ export default function DraftList({ onOpen, refreshKey }) {
               <span className="ml-2 text-emerald-500 font-medium">（掲載済み {publishedCount} 件）</span>
             )}
           </p>
-          {publishedCount > 0 && (
+          {(publishedCount > 0 || pendingDeletionCount > 0) && (
             <button
               onClick={() => setShowDeploy(true)}
               className="flex items-center gap-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white px-3 py-2 rounded-lg transition-colors"
             >
               <Upload className="w-3.5 h-3.5" />
               サイトを更新
+              {pendingDeletionCount > 0 && (
+                <span className="ml-0.5 bg-rose-400 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">
+                  -{pendingDeletionCount}
+                </span>
+              )}
             </button>
           )}
         </div>

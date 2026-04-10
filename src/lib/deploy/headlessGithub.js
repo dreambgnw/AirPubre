@@ -9,6 +9,7 @@
 
 import { deployToGitHub } from './github.js'
 import { serializeHeadlessMarkdown } from '../headlessFrontmatter.js'
+import { getPendingDeletions, clearPendingDeletions } from '../storage.js'
 
 /**
  * data URL（base64）→ { bytes, ext }
@@ -92,21 +93,48 @@ export async function deployHeadless(drafts, config) {
   if (!owner || !repo) throw new Error('GitHub リポジトリ名が未設定です（owner/repo 形式）')
   if (!config.githubToken) throw new Error('GitHub Token が未設定です')
 
+  const postsDir = (config.headlessPostsDir || 'blog/posts').replace(/\/+$/, '')
+  const thumbDir = (config.headlessThumbnailsDir || 'blog/thumbnails').replace(/\/+$/, '')
+
   const files = buildHeadlessFiles(drafts, {
-    postsDir: config.headlessPostsDir,
-    thumbnailsDir: config.headlessThumbnailsDir,
+    postsDir,
+    thumbnailsDir: thumbDir,
   })
 
-  if (files.size === 0) throw new Error('出力対象の記事がありません')
+  // 削除待ちキューからパス一覧を組み立てる
+  const pending = await getPendingDeletions()
+  const deletions = []
+  for (const pd of pending) {
+    deletions.push(`${postsDir}/${pd.slug}.md`)
+    if (pd.thumbnailFilename) deletions.push(`${thumbDir}/${pd.thumbnailFilename}`)
+  }
+
+  if (files.size === 0 && deletions.length === 0) {
+    throw new Error('出力対象の記事も削除もありません')
+  }
+
+  const msgParts = []
+  if (drafts.length > 0)  msgParts.push(`${drafts.length} 件更新`)
+  if (pending.length > 0) msgParts.push(`${pending.length} 件削除`)
 
   const result = await deployToGitHub(files, {
     token: config.githubToken,
     owner,
     repo,
     branch: config.githubBranch || 'main',
-    message: `post: AirPubre から ${drafts.length} 件を更新`,
+    message: `post: AirPubre から ${msgParts.join(' + ')}`,
     safePush: true, // 外部ビルダー（deploy-server.sh）の auto-commit と競合検知＋リトライ
+    deletions,
   })
 
-  return { ...result, fileCount: files.size }
+  // push 成功 → 削除キューをクリア
+  if (pending.length > 0) {
+    await clearPendingDeletions(pending.map(p => p.slug))
+  }
+
+  return {
+    ...result,
+    fileCount: files.size,
+    deletedCount: deletions.length,
+  }
 }

@@ -6,7 +6,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'airpubre'
-const DB_VERSION = 2  // metaTemplates store を追加したので +1
+const DB_VERSION = 3  // v3: pendingDeletions store を追加（headless 削除伝播用）
 
 async function getDB() {
   return openDB(DB_NAME, DB_VERSION, {
@@ -27,6 +27,10 @@ async function getDB() {
       // meta タグテンプレート（v2 で追加）
       if (!db.objectStoreNames.contains('metaTemplates')) {
         db.createObjectStore('metaTemplates', { keyPath: 'id' })
+      }
+      // 削除待ち（v3 で追加：headless モードで削除された記事を次回 push で反映させるためのキュー）
+      if (!db.objectStoreNames.contains('pendingDeletions')) {
+        db.createObjectStore('pendingDeletions', { keyPath: 'slug' })
       }
     }
   })
@@ -96,6 +100,41 @@ export async function getDraft(id) {
 export async function deleteDraft(id) {
   const db = await getDB()
   return db.delete('drafts', id)
+}
+
+// ============================================================
+// 削除待ちキュー（headless モードの削除伝播用）
+// ============================================================
+
+/**
+ * 削除された draft の slug とサムネイルファイル名をキューに追加する。
+ * 次回の deployHeadless で GitHub tree から対応パスを除去するのに使う。
+ * @param {{ slug: string, thumbnailFilename?: string|null }} entry
+ */
+export async function addPendingDeletion({ slug, thumbnailFilename = null }) {
+  if (!slug) return
+  const db = await getDB()
+  await db.put('pendingDeletions', {
+    slug,
+    thumbnailFilename,
+    deletedAt: new Date().toISOString(),
+  })
+}
+
+export async function getPendingDeletions() {
+  const db = await getDB()
+  return db.getAll('pendingDeletions')
+}
+
+export async function clearPendingDeletions(slugs = null) {
+  const db = await getDB()
+  const tx = db.transaction('pendingDeletions', 'readwrite')
+  if (slugs === null) {
+    await tx.store.clear()
+  } else {
+    for (const s of slugs) await tx.store.delete(s)
+  }
+  await tx.done
 }
 
 // ============================================================

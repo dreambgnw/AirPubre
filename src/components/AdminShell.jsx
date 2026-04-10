@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Upload, LayoutDashboard, FileText, Settings as SettingsIcon, RefreshCw, X, AlertTriangle } from 'lucide-react'
+import { Plus, Upload, LayoutDashboard, FileText, Settings as SettingsIcon, RefreshCw, X, AlertTriangle, GitBranch, CheckCircle, Loader2 } from 'lucide-react'
 import Editor from './Editor/Editor.jsx'
 import DraftList from './Editor/DraftList.jsx'
 import Dashboard from './Dashboard.jsx'
@@ -222,6 +222,7 @@ export default function AdminShell({ authLevel, onElevate }) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [siteTitle, setSiteTitle] = useState('')
   const [autoPullStatus, setAutoPullStatus] = useState(null) // null | { state, result?, error? }
+  const [conflictSlugs, setConflictSlugs] = useState(null) // null | string[]
 
   // 初期URLを正規化（hashが空やeditorなら置き換え）
   useEffect(() => {
@@ -317,7 +318,20 @@ export default function AdminShell({ authLevel, onElevate }) {
 
         {/* 起動時自動 pull バナー */}
         {autoPullStatus && (
-          <AutoPullBanner status={autoPullStatus} onClose={() => setAutoPullStatus(null)} />
+          <AutoPullBanner
+            status={autoPullStatus}
+            onClose={() => setAutoPullStatus(null)}
+            onResolveConflicts={(slugs) => setConflictSlugs(slugs)}
+          />
+        )}
+
+        {/* 競合解決モーダル */}
+        {conflictSlugs && (
+          <ConflictResolveModal
+            slugs={conflictSlugs}
+            onClose={() => setConflictSlugs(null)}
+            onResolved={() => setRefreshKey(k => k + 1)}
+          />
         )}
 
         {/* メインコンテンツ */}
@@ -370,8 +384,103 @@ export default function AdminShell({ authLevel, onElevate }) {
   )
 }
 
+// ── 競合解決モーダル（skippedSlugs ごとに keep-local / take-remote を選ぶ）────
+function ConflictResolveModal({ slugs, onClose, onResolved }) {
+  const [resolving, setResolving] = useState(null) // slug being resolved
+  const [remaining, setRemaining] = useState(slugs)
+  const [error, setError] = useState(null)
+
+  const takeRemote = async (slug) => {
+    setError(null)
+    setResolving(slug)
+    try {
+      const cfg = await getSiteConfig()
+      const [owner, repo] = (cfg.githubRepo ?? '').split('/')
+      if (!owner || !repo) throw new Error('GitHub リポジトリ設定がない')
+      await importFromGitHub({
+        owner, repo,
+        branch: cfg.githubBranch || 'main',
+        postsDir: cfg.headlessPostsDir,
+        thumbnailsDir: cfg.headlessThumbnailsDir,
+        token: cfg.githubToken,
+        force: true,
+        onlySlugs: [slug],
+      })
+      setRemaining(r => r.filter(s => s !== slug))
+      onResolved?.()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setResolving(null)
+    }
+  }
+
+  const keepLocal = (slug) => {
+    // ローカル維持＝次回デプロイで上書きされる。何も DB 書き込みせず、リストから外すだけ。
+    setRemaining(r => r.filter(s => s !== slug))
+  }
+
+  useEffect(() => {
+    if (remaining.length === 0) onClose()
+  }, [remaining, onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-amber-500" />
+            <h2 className="text-sm font-bold text-gray-800">競合を解決</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-gray-500">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+          ローカルに未デプロイの変更がある記事です。リモート（GitHub）を採用するか、ローカルを維持するか選んでください。
+        </p>
+
+        {error && (
+          <div className="mb-3 text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto space-y-2">
+          {remaining.map(slug => (
+            <div key={slug} className="border border-sky-100 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-mono text-gray-700 break-all">{slug}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => keepLocal(slug)}
+                  disabled={resolving === slug}
+                  className="flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 disabled:opacity-40"
+                >
+                  ローカル維持
+                </button>
+                <button
+                  onClick={() => takeRemote(slug)}
+                  disabled={resolving === slug}
+                  className="flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 flex items-center justify-center gap-1"
+                >
+                  {resolving === slug ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  リモートを採用
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── 起動時自動 pull バナー ────────────────────────────────────────
-function AutoPullBanner({ status, onClose }) {
+function AutoPullBanner({ status, onClose, onResolveConflicts }) {
   const { state, result, error } = status
 
   // 完了から 6 秒後に自動で消す（競合があった時は消さない）
@@ -408,6 +517,14 @@ function AutoPullBanner({ status, onClose }) {
               </p>
             )}
           </div>
+          {result.skippedSlugs?.length > 0 && (
+            <button
+              onClick={() => onResolveConflicts?.(result.skippedSlugs)}
+              className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white hover:bg-amber-600 shrink-0"
+            >
+              解決
+            </button>
+          )}
         </>
       )
     } else {

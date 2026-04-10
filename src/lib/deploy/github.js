@@ -24,9 +24,10 @@ function bytesToBase64(bytes) {
  * @param {string} [config.message] - コミットメッセージ
  * @param {boolean} [config.safePush=false] - true: fast-forward 必須（外部 commit と競合検知＋リトライ）
  *                                            false: force push（gh-pages 全上書きデプロイ向け）
+ * @param {string[]} [config.deletions] - 削除対象のパス一覧（tree から sha:null で外す）
  */
 export async function deployToGitHub(files, config) {
-  const { token, owner, repo, branch = 'gh-pages', message, safePush = false } = config
+  const { token, owner, repo, branch = 'gh-pages', message, safePush = false, deletions = [] } = config
   const api = `https://api.github.com/repos/${owner}/${repo}`
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -70,6 +71,20 @@ export async function deployToGitHub(files, config) {
     type: 'blob',
     sha: blobShas[i],
   }))
+
+  // 削除エントリ: sha: null を渡すと GitHub tree API はそのパスを外す（= 削除）
+  for (const path of deletions) {
+    treeEntries.push({
+      path,
+      mode: '100644',
+      type: 'blob',
+      sha: null,
+    })
+  }
+
+  if (treeEntries.length === 0) {
+    throw new Error('デプロイ対象のファイルも削除もありません')
+  }
 
   // ── tree → commit → ref 更新 を 1 試行する内部関数 ─────────────
   async function attempt() {

@@ -68,6 +68,8 @@ async function fetchRaw({ owner, repo, branch, path, token }) {
  * @param {string} [opts.thumbnailsDir="blog/thumbnails"]
  * @param {string} [opts.token] - private repo の場合は必須
  * @param {(p:{done:number,total:number,name:string}) => void} [opts.onProgress]
+ * @param {boolean} [opts.force=false] - true: ローカル未デプロイ変更を無視して上書き
+ * @param {string[]} [opts.onlySlugs] - 指定した場合、この slug 群のみ処理する
  * @returns {Promise<{ imported: number, skipped: number, total: number, skippedSlugs: string[] }>}
  */
 export async function importFromGitHub(opts) {
@@ -79,6 +81,8 @@ export async function importFromGitHub(opts) {
     thumbnailsDir = 'blog/thumbnails',
     token,
     onProgress,
+    force = false,
+    onlySlugs = null,
   } = opts
 
   if (!owner || !repo) throw new Error('owner / repo を指定してください')
@@ -109,14 +113,18 @@ export async function importFromGitHub(opts) {
       : f.path
     const slug = relPath.replace(/\.md$/, '')
 
+    // onlySlugs 指定時はそれ以外をスキップ
+    if (onlySlugs && !onlySlugs.includes(slug)) continue
+
     const local = bySlug.get(slug)
 
     // ローカルが新しければスキップ（＝ローカル未デプロイの編集を保護）
+    // force=true のときは保護を無効化（競合解決で「リモート採用」など）
     const remoteDate = parsed.date ? new Date(parsed.date).toISOString() : null
     const localUntracked = local && local.updatedAt && (
       !local.lastDeployedAt || local.updatedAt > local.lastDeployedAt
     )
-    if (localUntracked) {
+    if (!force && localUntracked) {
       skipped++
       skippedSlugs.push(slug)
       continue
