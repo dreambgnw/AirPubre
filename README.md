@@ -28,9 +28,12 @@ A fully browser-based Markdown CMS for solo writers. No server, no database. Dra
 | 🚀 **4種類のデプロイ先** | GitHub Pages / Vercel / ZIP ダウンロード / rsync |
 | 🧩 **ヘッドレスGitHubモード** | ビルドせず `.md` をそのままGitHubにpush。削除もtree APIで伝搬 |
 | 🔄 **デバイス間同期** | GitHubをハブに自動pull + 競合解決モーダル（ローカル維持 / リモート採用） |
+| 📱 **クロスデバイス設定同期** | `.airpubre/config.json` をリポジトリに同梱、新デバイスからワンクリックインポート |
 | 📥 **過去記事インポート** | md / zip / xml / GitHub URLクローンに対応 |
+| 🏷 **タグサジェスト** | 既存タグを使用頻度順に提案、クリックで追加 |
 | 🤖 **AI要約（ローカル）** | Transformers.js でAPIキー不要・ネット不要 |
 | 🎨 **4テーマ** | WordPress / Word / Obsidian / Markdown — 管理画面UIにも反映 |
+| 🖼 **サムネイル形式指定** | WebP / PNG / JPEG / そのままから選択可能 |
 | 🔐 **マスターキー認証** | ひらがな単語リスト + PBKDF2 (200k rounds, SHA-256) |
 
 ---
@@ -66,7 +69,7 @@ npm run build   # → dist/
 - **PWA**: `vite-plugin-pwa` (Workbox)
 - **AI**: `@xenova/transformers` (Transformers.js)
 - **Packaging**: `fflate` (ZIP生成)
-- **Deploy Adapters**: GitHub REST API / Vercel API / ZIP / rsync (+ Headless GitHub)
+- **Deploy Adapters**: GitHub REST API / Vercel API / ZIP / Headless GitHub
 
 ---
 
@@ -93,11 +96,11 @@ src/
 
 ## 🧠 How It Works
 
-1. **Setup** — マスターキー（ひらがな4語）を生成、PBKDF2で暗号化保管
-2. **Write** — IndexedDBに下書き保存。Markdown / リッチテキスト切り替え可
+1. **Setup** — マスターキー（ひらがな4語）を生成、PBKDF2で暗号化保管。GitHubトークン・リポジトリもウィザード内で設定可能
+2. **Write** — IndexedDBに下書き保存。Markdown / リッチテキスト切り替え可。タグは使用頻度順にサジェスト
 3. **Build** — ブラウザ内で `marked` → HTML化、テーマCSSを適用
-4. **Deploy** — 選んだアダプターで配信。ヘッドレスモードなら`.md`をそのままpush
-5. **Sync** — 起動時に自動pull、競合があればモーダルで解決
+4. **Deploy** — GitHub Pages / Vercel / ZIP / ヘッドレスGitHubから選択。`.airpubre/config.json` を自動同梱
+5. **Sync** — 起動時に自動pull、競合があればモーダルで解決。新デバイスではリポジトリから設定をインポート
 
 ---
 
@@ -113,6 +116,13 @@ src/
 - [x] GitHub URLクローンインポート
 - [x] 競合解決UI + 削除の伝搬
 - [x] テーマを管理画面UIに反映
+- [x] タグサジェスト（使用頻度順提案 + クリック追加）
+- [x] サムネイル形式指定（WebP / PNG / JPEG / original）
+- [x] セットアップウィザードに GitHub 認証情報ステップ追加
+- [x] クロスデバイス設定同期（`.airpubre/config.json`）
+- [x] インポート時の既存記事フロントマター保持（date→updated、タグ保持）
+- [x] 著者ページ URL のカスタム指定
+- [x] rsync 廃止 → ZIP に統一
 - [ ] エンタープライズ対応（共同編集・権限管理）— Issueベースで対応
 
 ---
