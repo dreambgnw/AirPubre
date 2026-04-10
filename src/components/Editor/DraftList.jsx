@@ -3,6 +3,7 @@ import { X, PenLine, Clock, Globe, Upload, CheckCircle, Loader2 } from 'lucide-r
 import { getDrafts, deleteDraft, getSiteConfig, saveDraft, getSyncCredential, addPendingDeletion, getPendingDeletions } from '../../lib/storage.js'
 import { buildSite, buildManifest } from '../../lib/builder.js'
 import { buildSyncFiles } from '../../lib/sync.js'
+import { encryptSyncConfig } from '../../lib/crypto.js'
 import { deployToGitHub } from '../../lib/deploy/github.js'
 import { deployToVercel } from '../../lib/deploy/vercel.js'
 import { downloadAsZip } from '../../lib/deploy/zip.js'
@@ -98,6 +99,16 @@ function DeploySelectModal({ onClose }) {
         const allDrafts = await getDrafts()
         const syncFiles = await buildSyncFiles(allDrafts, syncCred, siteConfig.syncPassphrase)
         for (const [path, content] of syncFiles) files.set(path, content)
+      }
+
+      // クロスデバイス同期用 .airpubre/sync.enc（syncPassphrase で暗号化した設定）
+      if (siteConfig.syncPassphrase) {
+        try {
+          const { githubToken: _t, vercelToken: _v, syncPassphrase: _s, ...safe } = siteConfig
+          const encrypted = await encryptSyncConfig(safe, siteConfig.syncPassphrase)
+          files.set('.airpubre/sync.enc', encrypted)
+          files.set('.airpubre/config.json', JSON.stringify(safe, null, 2))
+        } catch (_) { /* 暗号化失敗時は skip */ }
       }
 
       setDeployState('deploying')

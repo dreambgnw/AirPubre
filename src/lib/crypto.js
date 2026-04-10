@@ -103,6 +103,59 @@ export async function verifyKey(keyString, storedHash) {
 }
 
 // ============================================================
+// AES-GCM 暗号化 / 復号（サブキーベースのクロスデバイス同期用）
+// ============================================================
+
+/**
+ * サブキー文字列から AES-GCM 用の CryptoKey を派生する
+ */
+async function deriveAesKey(subKeyString) {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(subKeyString), 'PBKDF2', false, ['deriveKey']
+  )
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('airpubre-sync-v1'), hash: 'SHA-256', iterations: 100000 },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  )
+}
+
+/**
+ * オブジェクトをサブキーで AES-GCM 暗号化し、Base64 文字列として返す
+ * @param {Object} data
+ * @param {string} subKeyString
+ * @returns {Promise<string>}
+ */
+export async function encryptSyncConfig(data, subKeyString) {
+  const aesKey = await deriveAesKey(subKeyString)
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const plaintext = enc.encode(JSON.stringify(data))
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext)
+  // iv(12) + ciphertext を結合して Base64
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(ciphertext), iv.length)
+  return btoa(String.fromCharCode(...combined))
+}
+
+/**
+ * Base64 暗号文をサブキーで復号してオブジェクトを返す
+ * @param {string} encrypted - Base64 文字列
+ * @param {string} subKeyString
+ * @returns {Promise<Object>}
+ */
+export async function decryptSyncConfig(encrypted, subKeyString) {
+  const aesKey = await deriveAesKey(subKeyString)
+  const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
+  const iv = combined.slice(0, 12)
+  const ciphertext = combined.slice(12)
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext)
+  return JSON.parse(new TextDecoder().decode(plaintext))
+}
+
+// ============================================================
 // マスターキー → サブキー の派生
 // ============================================================
 

@@ -1,34 +1,44 @@
 import { useState } from 'react'
 import { Feather, Wrench, RefreshCw, Loader2 } from 'lucide-react'
 
-const RAW_BASE = 'https://raw.githubusercontent.com'
-
 export default function StepMode({ next }) {
   const [showSync, setShowSync] = useState(false)
-  const [syncRepo, setSyncRepo] = useState('')
-  const [syncToken, setSyncToken] = useState('')
-  const [syncBranch, setSyncBranch] = useState('main')
+  const [syncUrl, setSyncUrl] = useState('')
+  const [syncSubKey, setSyncSubKey] = useState('')
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncError, setSyncError] = useState(null)
 
   const handleSync = async () => {
     setSyncError(null)
-    const repo = syncRepo.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '')
-    if (!repo.includes('/')) {
-      setSyncError('owner/repo 形式で入力してください')
+    const baseUrl = syncUrl.trim().replace(/\/+$/, '')
+    if (!baseUrl) {
+      setSyncError('サイトの URL を入力してください')
+      return
+    }
+    if (!syncSubKey.trim()) {
+      setSyncError('同期パスフレーズを入力してください')
       return
     }
     setSyncLoading(true)
     try {
-      const url = `${RAW_BASE}/${repo}/${syncBranch.trim() || 'main'}/.airpubre/config.json`
-      const headers = syncToken.trim() ? { Authorization: `Bearer ${syncToken.trim()}` } : {}
-      const res = await fetch(url, { headers })
+      // 1. サイト URL から暗号化ファイルを取得
+      const encUrl = `${baseUrl}/.airpubre/sync.enc`
+      const res = await fetch(encUrl)
       if (!res.ok) throw new Error(res.status === 404
-        ? '.airpubre/config.json が見つかりません。先に別デバイスからデプロイしてください。'
+        ? '.airpubre/sync.enc が見つかりません。先に別デバイスからデプロイしてください。'
         : `取得に失敗しました (${res.status})`)
-      const config = await res.json()
+      const encrypted = await res.text()
 
-      // saveSiteConfig で非秘匿設定を書き込む
+      // 2. 同期パスフレーズで復号
+      const { decryptSyncConfig } = await import('../../lib/crypto.js')
+      let config
+      try {
+        config = await decryptSyncConfig(encrypted, syncSubKey.trim())
+      } catch (_) {
+        throw new Error('復号に失敗しました。同期パスフレーズが正しいか確認してください。')
+      }
+
+      // 3. 非秘匿設定を siteConfig に書き込む
       const { saveSiteConfig, getSiteConfig } = await import('../../lib/storage.js')
       const existing = await getSiteConfig()
       const merged = { ...existing }
@@ -37,9 +47,6 @@ export default function StepMode({ next }) {
           merged[k] = v
         }
       }
-      // トークンも入力されていれば保存
-      if (syncToken.trim()) merged.githubToken = syncToken.trim()
-      merged.githubRepo = repo
       await saveSiteConfig(merged)
 
       // mode を判定して次のステップへ
@@ -110,37 +117,37 @@ export default function StepMode({ next }) {
         {showSync && (
           <div className="mt-3 p-4 rounded-2xl border border-sky-100 bg-sky-50/40 space-y-3">
             <p className="text-xs text-gray-500 leading-relaxed">
-              別のデバイスから AirPubre でデプロイ済みのリポジトリを指定すると、設定を引き継げます。
+              デプロイ済みのサイト URL とサブキーを入力すると、設定を暗号化して引き継げます。
             </p>
-            <input
-              type="text"
-              value={syncRepo}
-              onChange={e => setSyncRepo(e.target.value)}
-              placeholder="owner/repo"
-              className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
-            <input
-              type="password"
-              value={syncToken}
-              onChange={e => setSyncToken(e.target.value)}
-              placeholder="Token（private リポジトリのみ）"
-              className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
-            <input
-              type="text"
-              value={syncBranch}
-              onChange={e => setSyncBranch(e.target.value)}
-              placeholder="main"
-              className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">サイト URL</label>
+              <input
+                type="text"
+                value={syncUrl}
+                onChange={e => setSyncUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">同期パスフレーズ</label>
+              <input
+                type="password"
+                value={syncSubKey}
+                onChange={e => setSyncSubKey(e.target.value)}
+                placeholder="設定画面で入力したパスフレーズ"
+                className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
+              />
+              <p className="text-xs text-gray-400 mt-1">設定 → デバイス間同期 で設定した同期パスフレーズです。</p>
+            </div>
             {syncError && (
               <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{syncError}</p>
             )}
             <button
               onClick={handleSync}
-              disabled={!syncRepo.trim() || syncLoading}
+              disabled={!syncUrl.trim() || !syncSubKey.trim() || syncLoading}
               className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                syncRepo.trim() && !syncLoading
+                syncUrl.trim() && syncSubKey.trim() && !syncLoading
                   ? 'bg-sky-500 hover:bg-sky-600 text-white'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}

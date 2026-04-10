@@ -9,17 +9,30 @@
 
 import { deployToGitHub } from './github.js'
 import { serializeHeadlessMarkdown } from '../headlessFrontmatter.js'
-import { getPendingDeletions, clearPendingDeletions, getSiteConfig } from '../storage.js'
+import { getPendingDeletions, clearPendingDeletions } from '../storage.js'
+import { encryptSyncConfig } from '../crypto.js'
 
-/** siteConfig から秘匿情報を除いた同期用 JSON を生成 */
-function buildSyncConfig(config) {
+/**
+ * siteConfig から秘匿情報を除き、サブキーハッシュで暗号化した sync.enc を生成。
+ * サブキーハッシュが取得できない場合は平文 JSON にフォールバック。
+ */
+async function buildSyncFiles(config) {
   const {
-    // 秘匿情報は除外
     githubToken: _t, vercelToken: _v, syncPassphrase: _s,
-    // 残りを同期対象に
     ...safe
   } = config
-  return JSON.stringify(safe, null, 2)
+  const result = new Map()
+  // 平文 config.json（後方互換・GitHub API 経由の auto-pull 用）
+  result.set('.airpubre/config.json', JSON.stringify(safe, null, 2))
+  // 暗号化版（syncPassphrase が設定されていればそれで暗号化、なければスキップ）
+  // syncPassphrase はユーザーが設定画面で指定する同期用パスフレーズ
+  try {
+    if (config.syncPassphrase) {
+      const encrypted = await encryptSyncConfig(safe, config.syncPassphrase)
+      result.set('.airpubre/sync.enc', encrypted)
+    }
+  } catch (_) { /* 暗号化失敗時はスキップ */ }
+  return result
 }
 
 /**
@@ -120,8 +133,9 @@ export async function deployHeadless(drafts, config) {
     if (pd.thumbnailFilename) deletions.push(`${thumbDir}/${pd.thumbnailFilename}`)
   }
 
-  // .airpubre/config.json を同梱（クロスデバイス同期用、秘匿情報は除外）
-  files.set('.airpubre/config.json', buildSyncConfig(config))
+  // .airpubre/config.json + sync.enc を同梱（クロスデバイス同期用）
+  const syncFiles = await buildSyncFiles(config)
+  for (const [path, content] of syncFiles) files.set(path, content)
 
   if (files.size === 0 && deletions.length === 0) {
     throw new Error('出力対象の記事も削除もありません')
