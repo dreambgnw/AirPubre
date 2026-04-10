@@ -7,9 +7,35 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+
+    /* デフォルト（wordpress テーマ） */
+    --admin-bg: #f0f9ff;        /* sky-50 */
+    --admin-bg-soft: #e0f2fe;   /* sky-100 */
   }
+
+  /* ── 管理画面テーマ（subtle tint）─────────────────────────
+     白カードベースのデザインを壊さないように、ページ背景だけ淡く色付けする。
+     setupwizard で選んだテーマがダッシュボードにも反映される。 */
+  html[data-theme="wordpress"] {
+    --admin-bg: #f0f9ff;        /* sky-50 */
+    --admin-bg-soft: #e0f2fe;
+  }
+  html[data-theme="word"] {
+    --admin-bg: #f9fafb;        /* gray-50 */
+    --admin-bg-soft: #f3f4f6;
+  }
+  html[data-theme="obsidian"] {
+    --admin-bg: #eef2ff;        /* indigo-50 */
+    --admin-bg-soft: #e0e7ff;
+  }
+  html[data-theme="markdown"] {
+    --admin-bg: #ecfdf5;        /* emerald-50 */
+    --admin-bg-soft: #d1fae5;
+  }
+
   body {
-    @apply bg-sky-50 text-gray-800 antialiased;
+    background: var(--admin-bg);
+    @apply text-gray-800 antialiased;
   }
 }
 

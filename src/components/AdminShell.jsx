@@ -287,7 +287,7 @@ export default function AdminShell({ authLevel, onElevate }) {
   const handleImported = () => setRefreshKey(k => k + 1)
 
   return (
-    <div className="min-h-screen bg-sky-50 flex">
+    <div className="min-h-screen flex" style={{ background: 'var(--admin-bg)' }}>
       {/* PC サイドバー */}
       <Sidebar
         view={view}

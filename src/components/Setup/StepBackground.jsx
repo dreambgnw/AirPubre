@@ -1,4 +1,5 @@
 import { Monitor, Globe, FileText, Hash } from 'lucide-react'
+import { applyAdminTheme } from '../../lib/theme.js'
 
 const BACKGROUNDS = [
   {
@@ -56,7 +57,10 @@ export default function StepBackground({ data, next }) {
           return (
             <button
               key={bg.id}
-              onClick={() => next({ background: bg.id })}
+              onClick={() => {
+                applyAdminTheme(bg.id)
+                next({ background: bg.id })
+              }}
               className="rounded-2xl border-2 border-sky-100 bg-white hover:border-sky-400 hover:shadow-md transition-all text-left group overflow-hidden"
             >
               {/* プレビュー */}

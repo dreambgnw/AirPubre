@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import SetupWizard from './components/Setup/SetupWizard.jsx'
 import Login from './components/Login.jsx'
 import AdminShell from './components/AdminShell.jsx'
-import { getSetupState } from './lib/storage.js'
+import { getSetupState, getSiteConfig } from './lib/storage.js'
+import { applyAdminTheme } from './lib/theme.js'
 
 // 認証レベルをsessionStorageで管理
 // → タブを閉じるとログアウト、リロードではセッション維持
@@ -21,6 +22,9 @@ export default function App() {
   const [authLevel, setAuthLevel] = useState('none')
 
   useEffect(() => {
+    getSiteConfig().then(config => {
+      applyAdminTheme(config?.background)
+    })
     getSetupState().then(state => {
       if (!state?.completed) {
         setPhase('setup')

@@ -15,6 +15,7 @@ import {
 } from '../../lib/storage.js'
 import { importFromGitHub } from '../../lib/githubImporter.js'
 import { fetchRepoFile, pushRepoFile } from '../../lib/githubFile.js'
+import { applyAdminTheme } from '../../lib/theme.js'
 import SyncSection from './SyncSection.jsx'
 
 // ── 入力フィールド部品 ────────────────────────────────────────────
@@ -384,7 +385,7 @@ export default function Settings() {
         <Field label="サイトテーマ" hint="生成されるサイトのデザインテーマ">
           <Select
             value={config.background ?? 'wordpress'}
-            onChange={set('background')}
+            onChange={(v) => { applyAdminTheme(v); set('background')(v) }}
             options={[
               { value: 'wordpress', label: 'WordPress — クリーンなブログ定番スタイル' },
               { value: 'obsidian',  label: 'Obsidian — ダーク・グラフUI風' },
