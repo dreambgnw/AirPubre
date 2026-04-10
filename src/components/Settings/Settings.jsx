@@ -466,6 +466,9 @@ export default function Settings() {
           <Field label="ウェブサイト">
             <Input value={config.authorWebsite} onChange={set('authorWebsite')} placeholder="https://example.com" mono />
           </Field>
+          <Field label="著者ページ URL" hint="記事下の著者カードのリンク先。空欄なら /author/ を使用。">
+            <Input value={config.authorPageUrl} onChange={set('authorPageUrl')} placeholder="https://example.com/about/" mono />
+          </Field>
         </div>
       </Section>
 
@@ -515,7 +518,6 @@ export default function Settings() {
               { value: 'github',          label: 'GitHub Pages' },
               { value: 'vercel',          label: 'Vercel' },
               { value: 'zip',             label: 'ZIP ダウンロード' },
-              { value: 'rsync',           label: 'rsync（レンタルサーバー）' },
               { value: 'headless-github', label: 'Headless GitHub（外部ビルダー連携）' },
             ]}
           />
@@ -573,26 +575,13 @@ export default function Settings() {
           </>
         )}
 
-        {config.deployTarget === 'rsync' && (
-          <>
-            <Field label="ホスト名">
-              <Input value={config.rsyncHost} onChange={set('rsyncHost')} placeholder="example.com" mono />
-            </Field>
-            <Field label="ユーザー名">
-              <Input value={config.rsyncUser} onChange={set('rsyncUser')} placeholder="username" mono />
-            </Field>
-            <Field label="デプロイ先パス" hint="public_html/blog など">
-              <Input value={config.rsyncPath} onChange={set('rsyncPath')} placeholder="/home/user/public_html" mono />
-            </Field>
-          </>
-        )}
 
         {config.deployTarget === 'headless-github' && (
           <>
             <p className="text-xs text-gray-500 -mt-1 leading-relaxed">
               静的HTMLは生成せず、記事の <span className="font-mono">.md</span> とサムネイル画像だけを GitHub に push します。
               リポジトリ側のビルダー（cron / Webhook で動く <span className="font-mono">deploy-server.sh</span> など）が
-              <span className="font-mono"> posts.json</span> や OGP HTML、rsync 転送を担当する想定です。
+              <span className="font-mono"> posts.json</span> や OGP HTML の生成・転送を担当する想定です。
             </p>
             <Field label="GitHub Token" hint="repo スコープのトークンが必要です。">
               <SecretInput value={config.githubToken} onChange={set('githubToken')} placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
@@ -608,6 +597,18 @@ export default function Settings() {
             </Field>
             <Field label="サムネイルディレクトリ">
               <Input value={config.headlessThumbnailsDir} onChange={set('headlessThumbnailsDir')} placeholder="blog/thumbnails" mono />
+            </Field>
+            <Field label="サムネイル形式" hint="インポート時にファイル名の拡張子を変換する形式。">
+              <Select
+                value={config.headlessThumbnailFormat || 'webp'}
+                onChange={set('headlessThumbnailFormat')}
+                options={[
+                  { value: 'webp',     label: 'WebP（.webp）' },
+                  { value: 'png',      label: 'PNG（.png）' },
+                  { value: 'jpg',      label: 'JPEG（.jpg）' },
+                  { value: 'original', label: 'そのまま（変換しない）' },
+                ]}
+              />
             </Field>
             <Field label="起動時の自動同期">
               <label className="flex items-center gap-2 cursor-pointer">

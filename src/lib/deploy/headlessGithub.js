@@ -4,12 +4,23 @@
  * AirPubre の draft を「shunature-one 形式」のリポジトリに push する。
  * 静的 HTML は出力しない（記事の .md とサムネイル画像のみ）。
  * リポジトリ側で別途ビルダー（deploy-server.sh）が posts.json / sitemap.xml /
- * OGP HTML / rsync 転送 などを行う前提。
+ * OGP HTML の生成・転送などを行う前提。
  */
 
 import { deployToGitHub } from './github.js'
 import { serializeHeadlessMarkdown } from '../headlessFrontmatter.js'
-import { getPendingDeletions, clearPendingDeletions } from '../storage.js'
+import { getPendingDeletions, clearPendingDeletions, getSiteConfig } from '../storage.js'
+
+/** siteConfig から秘匿情報を除いた同期用 JSON を生成 */
+function buildSyncConfig(config) {
+  const {
+    // 秘匿情報は除外
+    githubToken: _t, vercelToken: _v, syncPassphrase: _s,
+    // 残りを同期対象に
+    ...safe
+  } = config
+  return JSON.stringify(safe, null, 2)
+}
 
 /**
  * data URL（base64）→ { bytes, ext }
@@ -109,6 +120,9 @@ export async function deployHeadless(drafts, config) {
     if (pd.thumbnailFilename) deletions.push(`${thumbDir}/${pd.thumbnailFilename}`)
   }
 
+  // .airpubre/config.json を同梱（クロスデバイス同期用、秘匿情報は除外）
+  files.set('.airpubre/config.json', buildSyncConfig(config))
+
   if (files.size === 0 && deletions.length === 0) {
     throw new Error('出力対象の記事も削除もありません')
   }
@@ -116,6 +130,11 @@ export async function deployHeadless(drafts, config) {
   const msgParts = []
   if (drafts.length > 0)  msgParts.push(`${drafts.length} 件更新`)
   if (pending.length > 0) msgParts.push(`${pending.length} 件削除`)
+
+  // 公開 URL: baseUrl が設定されていれば github.io の代わりに使う
+  const siteUrl = config.baseUrl && config.baseUrl !== '/'
+    ? config.baseUrl.replace(/\/$/, '') + '/'
+    : undefined
 
   const result = await deployToGitHub(files, {
     token: config.githubToken,
@@ -125,6 +144,7 @@ export async function deployHeadless(drafts, config) {
     message: `post: AirPubre から ${msgParts.join(' + ')}`,
     safePush: true, // 外部ビルダー（deploy-server.sh）の auto-commit と競合検知＋リトライ
     deletions,
+    siteUrl,
   })
 
   // push 成功 → 削除キューをクリア

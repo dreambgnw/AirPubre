@@ -105,7 +105,7 @@ function buildIndexPage({ posts, title, description, css, baseUrl, siteConfig })
   </main>
   <footer class="site-footer">
     <div class="container">
-      <small>Powered by <a href="https://github.com/airpubre/airpubre">AirPubre</a></small>
+      <small>Powered by <a href="https://github.com/dreambgnw/AirPubre">AirPubre</a></small>
     </div>
   </footer>
 </body>
@@ -134,9 +134,10 @@ function buildPostPage({ post, slug, siteTitle, css, baseUrl, siteConfig, slugBy
     `<span class="tag">${escapeHtml(t)}</span>`
   ).join('')
 
-  const { authorName, authorAvatarUrl } = siteConfig
+  const { authorName, authorAvatarUrl, authorPageUrl } = siteConfig
+  const authorLink = authorPageUrl || `${baseUrl}author/`
   const authorHtml = authorName ? `
-    <a href="${baseUrl}author/" class="author-card">
+    <a href="${authorLink}" class="author-card">
       ${authorAvatarUrl ? `<img src="${escapeHtml(authorAvatarUrl)}" alt="${escapeHtml(authorName)}" class="author-avatar" />` : ''}
       <div>
         <p class="author-name">${escapeHtml(authorName)}</p>
@@ -184,7 +185,7 @@ function buildPostPage({ post, slug, siteTitle, css, baseUrl, siteConfig, slugBy
   </main>
   <footer class="site-footer">
     <div class="container">
-      <small>Powered by <a href="https://github.com/airpubre/airpubre">AirPubre</a></small>
+      <small>Powered by <a href="https://github.com/dreambgnw/AirPubre">AirPubre</a></small>
     </div>
   </footer>
 </body>
@@ -254,7 +255,7 @@ function buildAuthorPage({ posts, css, baseUrl, siteConfig, siteTitle }) {
   </main>
   <footer class="site-footer">
     <div class="container">
-      <small>Powered by <a href="https://github.com/airpubre/airpubre">AirPubre</a></small>
+      <small>Powered by <a href="https://github.com/dreambgnw/AirPubre">AirPubre</a></small>
     </div>
   </footer>
 </body>

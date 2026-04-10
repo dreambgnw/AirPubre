@@ -1,18 +1,16 @@
 import { useState } from 'react'
-import { Github, Triangle, Package, Server, GitBranch, Globe } from 'lucide-react'
+import { Github, Triangle, Package, GitBranch, Globe } from 'lucide-react'
 
 const ICONS = {
   github: Github,
   vercel: Triangle,
   zip: Package,
-  rsync: Server,
 }
 
 const ICON_COLORS = {
   github: 'text-gray-700',
   vercel: 'text-black',
   zip: 'text-sky-500',
-  rsync: 'text-sky-600',
 }
 
 export default function StepDeploy({ data, next }) {
@@ -36,12 +34,6 @@ export default function StepDeploy({ data, next }) {
       label: 'ZIPダウンロード',
       desc: 'ビルド済みファイルをZIPで受け取る。FTPやレンサバに手動アップ',
       pro: false,
-    },
-    {
-      id: 'rsync',
-      label: 'レンタルサーバー（rsync）',
-      desc: 'SSH/rsyncで直接サーバーに転送',
-      pro: true,
     },
   ]
 
@@ -153,7 +145,7 @@ export default function StepDeploy({ data, next }) {
 
       {data.mode === 'easy' && (
         <p className="text-center text-xs text-gray-400">
-          玄人モードに切り替えると GitHub Pages・rsync も選べます
+          玄人モードに切り替えると GitHub Pages も選べます
         </p>
       )}
     </div>

@@ -5,7 +5,7 @@ import DraftList from './Editor/DraftList.jsx'
 import Dashboard from './Dashboard.jsx'
 import ImportModal from './Import/ImportModal.jsx'
 import Settings from './Settings/Settings.jsx'
-import { getSiteConfig } from '../lib/storage.js'
+import { getSiteConfig, saveSiteConfig, getDrafts, saveDraft } from '../lib/storage.js'
 import { importFromGitHub } from '../lib/githubImporter.js'
 
 // ── PC サイドバー ─────────────────────────────────────────────────
@@ -247,8 +247,23 @@ export default function AdminShell({ authLevel, onElevate }) {
           postsDir: cfg.headlessPostsDir,
           thumbnailsDir: cfg.headlessThumbnailsDir,
           token: cfg.githubToken,
+          thumbnailFormat: cfg.headlessThumbnailFormat || 'webp',
         })
         if (cancelled) return
+
+        // .airpubre/config.json があれば非秘匿設定をマージ（空の項目のみ埋める）
+        if (result.remoteConfig) {
+          const current = await getSiteConfig()
+          const merged = { ...current }
+          for (const [k, v] of Object.entries(result.remoteConfig)) {
+            // ローカルに値がなく、秘匿フィールドでなければ取り込む
+            if (!current[k] && v && !['githubToken', 'vercelToken', 'syncPassphrase'].includes(k)) {
+              merged[k] = v
+            }
+          }
+          await saveSiteConfig(merged)
+        }
+
         setAutoPullStatus({ state: 'done', result })
         setRefreshKey(k => k + 1)
       } catch (e) {
@@ -405,6 +420,7 @@ function ConflictResolveModal({ slugs, onClose, onResolved }) {
         token: cfg.githubToken,
         force: true,
         onlySlugs: [slug],
+        thumbnailFormat: cfg.headlessThumbnailFormat || 'webp',
       })
       setRemaining(r => r.filter(s => s !== slug))
       onResolved?.()
@@ -415,9 +431,16 @@ function ConflictResolveModal({ slugs, onClose, onResolved }) {
     }
   }
 
-  const keepLocal = (slug) => {
-    // ローカル維持＝次回デプロイで上書きされる。何も DB 書き込みせず、リストから外すだけ。
+  const keepLocal = async (slug) => {
+    // ローカル維持＝次回デプロイで上書きされる。
+    // lastDeployedAt を updatedAt に揃えることで、次回 auto-pull でスキップ扱いにならないようにする。
+    const drafts = await getDrafts()
+    const draft = drafts.find(d => d.slug === slug)
+    if (draft) {
+      await saveDraft({ ...draft, lastDeployedAt: draft.updatedAt })
+    }
     setRemaining(r => r.filter(s => s !== slug))
+    onResolved?.()
   }
 
   useEffect(() => {

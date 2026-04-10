@@ -75,6 +75,7 @@ async function fetchRaw({ owner, repo, branch, path, token }) {
  * @param {(p:{done:number,total:number,name:string}) => void} [opts.onProgress]
  * @param {boolean} [opts.force=false] - true: ローカル未デプロイ変更を無視して上書き
  * @param {string[]} [opts.onlySlugs] - 指定した場合、この slug 群のみ処理する
+ * @param {string} [opts.thumbnailFormat="webp"] - サムネイル拡張子の変換先 ('webp'|'png'|'jpg'|'original')
  * @returns {Promise<{ imported: number, skipped: number, total: number, skippedSlugs: string[] }>}
  */
 export async function importFromGitHub(opts) {
@@ -88,6 +89,7 @@ export async function importFromGitHub(opts) {
     onProgress,
     force = false,
     onlySlugs = null,
+    thumbnailFormat = 'webp',
   } = opts
 
   if (!owner || !repo) throw new Error('owner / repo を指定してください')
@@ -138,23 +140,30 @@ export async function importFromGitHub(opts) {
     // サムネは raw URL で参照（ファイル取得しないので軽い）
     let thumbnail = null
     if (parsed.thumbnail) {
-      // deploy-server.sh は .jpg/.png を .webp に変換するので、frontmatter 上の名前を .webp に正規化
-      const webpName = parsed.thumbnail.replace(/\.(jpe?g|png)$/i, '.webp')
-      thumbnail = `${RAW_BASE}/${owner}/${repo}/${branch}/${thumbnailsDir}/${webpName}`
+      // thumbnailFormat に応じて拡張子を変換（'original' ならそのまま）
+      const thumbName = thumbnailFormat === 'original'
+        ? parsed.thumbnail
+        : parsed.thumbnail.replace(/\.(jpe?g|png|webp)$/i, `.${thumbnailFormat}`)
+      thumbnail = `${RAW_BASE}/${owner}/${repo}/${branch}/${thumbnailsDir}/${thumbName}`
     }
 
+    // 既存のローカル記事がある場合：
+    // - publishedAt（date）はローカルのものを保持、リモート日付は updatedAt に
+    // - タグもローカルのものを保持（ユーザーがローカルで編集した可能性があるため）
+    const isUpdate = !!local
     const draft = {
       id: local?.id, // 既存があれば上書き、なければ新規
       slug,
       title: parsed.title || slug,
       body: parsed.body || '',
-      tags: parsed.tags || [],
+      tags: isUpdate ? (local.tags || []) : (parsed.tags || []),
       thumbnail,
       thumbnailCredit: parsed.thumbnailCredit || '',
       thumbnailCreditUrl: parsed.thumbnailCreditUrl || '',
       summary: parsed.summary || '',
       status: 'published',
-      publishedAt: remoteDate,
+      publishedAt: isUpdate ? (local.publishedAt || remoteDate) : remoteDate,
+      updatedAt: isUpdate ? remoteDate : undefined,
       lastDeployedAt: remoteDate, // インポート直後は「変更なし」扱い
       createdAt: local?.createdAt,
     }
@@ -163,5 +172,13 @@ export async function importFromGitHub(opts) {
   }
 
   onProgress?.({ done: files.length, total: files.length, name: '' })
-  return { imported, skipped, total: files.length, skippedSlugs }
+
+  // .airpubre/config.json があれば取得して返す（クロスデバイス同期用）
+  let remoteConfig = null
+  try {
+    const cfgRaw = await fetchRaw({ owner, repo, branch, path: '.airpubre/config.json', token })
+    remoteConfig = JSON.parse(cfgRaw)
+  } catch (_) { /* ファイルがなくても無視 */ }
+
+  return { imported, skipped, total: files.length, skippedSlugs, remoteConfig }
 }

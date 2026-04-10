@@ -13,7 +13,6 @@ const DEPLOY_LABELS = {
   github: 'GitHub Pages',
   vercel: 'Vercel',
   zip:    'ZIPダウンロード',
-  rsync:  'レンタルサーバー（rsync）',
 }
 
 export default function StepDone({ data, onComplete }) {
@@ -50,8 +49,14 @@ export default function StepDone({ data, onComplete }) {
           deployTarget:    data.deployTarget ?? existingConfig.deployTarget,
           vercelFromGitHub: data.vercelFromGitHub ?? false,
           background:      data.background ?? 'wordpress',
-          githubBranch:    data.deployTarget === 'vercel' && data.vercelFromGitHub ? 'main' : existingConfig.githubBranch,
           defaultEditor:   deriveDefaultEditor(),
+          // credentials ステップで入力された値があれば反映
+          ...(data.githubToken  ? { githubToken:  data.githubToken }  : {}),
+          ...(data.githubRepo   ? { githubRepo:   data.githubRepo }   : {}),
+          ...(data.githubBranch ? { githubBranch: data.githubBranch } : {
+            githubBranch: data.deployTarget === 'vercel' && data.vercelFromGitHub
+              ? 'main' : existingConfig.githubBranch,
+          }),
         })
         setSaving(false)
       } catch (e) {

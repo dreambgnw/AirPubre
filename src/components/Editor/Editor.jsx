@@ -237,6 +237,8 @@ export default function Editor({ draft, onBack }) {
   const [wikiDrafts, setWikiDrafts]   = useState([])
   const [showWikiPicker, setShowWikiPicker] = useState(false)
   const [showCalloutMenu, setShowCalloutMenu] = useState(false)
+  // タグサジェスト: 全記事の既存タグ（使用回数順）
+  const [allTags, setAllTags] = useState([])
   // Markdown textarea の ref（Obsidian ツールバーの挿入用）
   const textareaRef = useRef(null)
 
@@ -247,6 +249,16 @@ export default function Editor({ draft, onBack }) {
       const bg = cfg.background ?? 'wordpress'
       setBackground(bg)
       if (bg === 'obsidian') getDrafts().then(setWikiDrafts)
+    })
+    // 全記事からタグを集計（使用回数順）
+    getDrafts().then(drafts => {
+      const freq = {}
+      for (const d of drafts) {
+        for (const t of (d.tags || [])) {
+          freq[t] = (freq[t] || 0) + 1
+        }
+      }
+      setAllTags(Object.entries(freq).sort((a, b) => b[1] - a[1]).map(e => e[0]))
     })
   }, [])
   // リッチテキスト用 HTML（body は常に Markdown で保持）
@@ -538,6 +550,26 @@ export default function Editor({ draft, onBack }) {
         placeholder="タグ（カンマ区切り）"
         className="w-full text-sm text-gray-500 bg-transparent border-none outline-none placeholder-gray-300"
       />
+      {/* タグサジェスト */}
+      {allTags.length > 0 && (() => {
+        const currentTags = tags.split(',').map(t => t.trim()).filter(Boolean)
+        const suggestions = allTags.filter(t => !currentTags.includes(t)).slice(0, 8)
+        if (suggestions.length === 0) return null
+        return (
+          <div className="flex flex-wrap gap-1 -mt-1">
+            {suggestions.map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTags(prev => prev ? `${prev}, ${t}` : t)}
+                className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-500 hover:bg-sky-100 transition-colors"
+              >
+                + {t}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* タブ */}
       <div className="flex border-b border-sky-100">

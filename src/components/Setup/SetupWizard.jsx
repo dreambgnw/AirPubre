@@ -4,10 +4,11 @@ import StepMasterKey from './StepMasterKey.jsx'
 import StepSubKey from './StepSubKey.jsx'
 import StepBackup from './StepBackup.jsx'
 import StepDeploy from './StepDeploy.jsx'
+import StepCredentials from './StepCredentials.jsx'
 import StepBackground from './StepBackground.jsx'
 import StepDone from './StepDone.jsx'
 
-const STEPS = ['mode', 'masterKey', 'subKey', 'backup', 'deploy', 'background', 'done']
+const STEPS = ['mode', 'masterKey', 'subKey', 'backup', 'deploy', 'credentials', 'background', 'done']
 
 export default function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(0)
@@ -15,7 +16,7 @@ export default function SetupWizard({ onComplete }) {
     mode: null,              // 'easy' | 'pro'
     masterKey: null,         // { words, keyString }
     subKey: null,            // string
-    deployTarget: null,      // 'github' | 'vercel' | 'zip' | 'rsync'
+    deployTarget: null,      // 'github' | 'vercel' | 'zip'
     vercelFromGitHub: null,  // boolean | null
     background: null,        // 'obsidian' | 'wordpress' | 'word' | 'markdown'
   })
@@ -59,8 +60,9 @@ export default function SetupWizard({ onComplete }) {
         {STEPS[step] === 'masterKey'  && <StepMasterKey  {...stepProps} />}
         {STEPS[step] === 'subKey'     && <StepSubKey     {...stepProps} />}
         {STEPS[step] === 'backup'     && <StepBackup     {...stepProps} />}
-        {STEPS[step] === 'deploy'     && <StepDeploy     {...stepProps} />}
-        {STEPS[step] === 'background' && <StepBackground {...stepProps} />}
+        {STEPS[step] === 'deploy'      && <StepDeploy      {...stepProps} />}
+        {STEPS[step] === 'credentials' && <StepCredentials {...stepProps} />}
+        {STEPS[step] === 'background'  && <StepBackground  {...stepProps} />}
         {STEPS[step] === 'done'       && <StepDone       {...stepProps} />}
       </main>
     </div>

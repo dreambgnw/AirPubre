@@ -25,9 +25,10 @@ function bytesToBase64(bytes) {
  * @param {boolean} [config.safePush=false] - true: fast-forward 必須（外部 commit と競合検知＋リトライ）
  *                                            false: force push（gh-pages 全上書きデプロイ向け）
  * @param {string[]} [config.deletions] - 削除対象のパス一覧（tree から sha:null で外す）
+ * @param {string} [config.siteUrl] - 公開 URL（指定時は github.io の代わりに使う）
  */
 export async function deployToGitHub(files, config) {
-  const { token, owner, repo, branch = 'gh-pages', message, safePush = false, deletions = [] } = config
+  const { token, owner, repo, branch = 'gh-pages', message, safePush = false, deletions = [], siteUrl } = config
   const api = `https://api.github.com/repos/${owner}/${repo}`
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -142,7 +143,7 @@ export async function deployToGitHub(files, config) {
       const sha = await attempt()
       return {
         commitSha: sha,
-        url: `https://${owner}.github.io/${repo}/`,
+        url: siteUrl || `https://${owner}.github.io/${repo}/`,
       }
     } catch (e) {
       lastErr = e

@@ -12,7 +12,6 @@ const DEPLOY_TARGET_LABELS = {
   github: 'GitHub Pages',
   vercel: 'Vercel',
   zip:    'ZIPダウンロード',
-  rsync:  'rsync',
   'headless-github': 'Headless GitHub',
 }
 
@@ -110,10 +109,13 @@ function DeploySelectModal({ onClose }) {
         const [owner, repo] = (siteConfig.githubRepo ?? '').split('/')
         if (!owner || !repo) throw new Error('GitHub リポジトリ名が未設定です（設定画面で owner/repo 形式で入力）')
         if (!siteConfig.githubToken) throw new Error('GitHub Token が未設定です')
+        const ghSiteUrl = siteConfig.baseUrl && siteConfig.baseUrl !== '/'
+          ? siteConfig.baseUrl.replace(/\/$/, '') + '/' : undefined
         result = await deployToGitHub(files, {
           token:  siteConfig.githubToken,
           owner, repo,
           branch: siteConfig.githubBranch || 'gh-pages',
+          siteUrl: ghSiteUrl,
         })
       } else if (target === 'vercel') {
         // Vercel × GitHub 連携：GitHub にプッシュ → Vercel が自動デプロイ

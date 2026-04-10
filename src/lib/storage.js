@@ -172,6 +172,7 @@ export const DEFAULT_SITE_CONFIG = {
   authorMastodon:  '',
   authorGitHub:    '',
   authorWebsite:   '',
+  authorPageUrl:   '', // 著者ページへのリンク URL（空欄なら /author/ を使う）
 
   // SEO / OGP デフォルト
   defaultOgImage:  '',
@@ -182,7 +183,7 @@ export const DEFAULT_SITE_CONFIG = {
   defaultEditor:   'markdown', // 'markdown' | 'richtext'
 
   // デプロイ設定（セットアップウィザードで設定済みのものを引き継ぐ）
-  deployTarget:    '', // 'github' | 'vercel' | 'zip' | 'rsync' | 'headless-github'
+  deployTarget:    '', // 'github' | 'vercel' | 'zip' | 'headless-github'
   githubToken:     '',
   githubRepo:      '',
   githubBranch:    'gh-pages',
@@ -197,9 +198,10 @@ export const DEFAULT_SITE_CONFIG = {
   vercelToken:        '',
   vercelProjectId:    '',
   vercelFromGitHub:   false, // true = GitHub Push → Vercel 自動デプロイ
-  rsyncHost:       '',
-  rsyncPath:       '',
-  rsyncUser:       '',
+
+  // サムネイル形式（headless インポート時にファイル名を変換する拡張子）
+  // 'webp' | 'png' | 'jpg' | 'original'（変換しない）
+  headlessThumbnailFormat: 'webp',
 
   // デバイス間同期
   syncPassphrase:  '', // 暗号化パスフレーズ（設定済みなら自動でデプロイに含める）
