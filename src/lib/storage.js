@@ -70,6 +70,31 @@ export async function getAuthInfo() {
 }
 
 // ============================================================
+// パスキー
+// ============================================================
+
+export async function savePasskeyCredentials(credentials) {
+  const db = await getDB()
+  await db.put('setup', credentials, 'passkeys')
+}
+
+export async function getPasskeyCredentials() {
+  const db = await getDB()
+  return (await db.get('setup', 'passkeys')) ?? []
+}
+
+export async function addPasskeyCredential(credential) {
+  const existing = await getPasskeyCredentials()
+  existing.push({ ...credential, createdAt: new Date().toISOString() })
+  await savePasskeyCredentials(existing)
+}
+
+export async function removePasskeyCredential(credentialId) {
+  const existing = await getPasskeyCredentials()
+  await savePasskeyCredentials(existing.filter(c => c.credentialId !== credentialId))
+}
+
+// ============================================================
 // 下書き
 // ============================================================
 

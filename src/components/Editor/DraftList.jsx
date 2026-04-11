@@ -174,8 +174,10 @@ function DeploySelectModal({ onClose }) {
   ]
   const stepIndex = steps.findIndex(s => s.id === deployState)
 
-  const changedCount   = publishedDrafts.filter(isChanged).length
-  const unchangedCount = publishedDrafts.length - changedCount
+  const changedDrafts   = publishedDrafts.filter(isChanged)
+  const unchangedCount  = publishedDrafts.length - changedDrafts.length
+  const [showUnchanged, setShowUnchanged] = useState(false)
+  const visibleDrafts   = showUnchanged ? publishedDrafts : changedDrafts
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
@@ -209,33 +211,35 @@ function DeploySelectModal({ onClose }) {
               </p>
             ) : (
               <>
-                {/* 変更なし件数のヒント */}
-                {unchangedCount > 0 && (
-                  <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                    前回のデプロイから変更のない記事（{unchangedCount}件）はデフォルトで除外してるよ。必要なら手動でチェックできるよ。
-                  </p>
-                )}
-
                 <div className="space-y-1">
-                  {/* 全選択 */}
-                  <button
-                    onClick={toggleAll}
-                    className="flex items-center gap-2 text-xs text-sky-500 hover:text-sky-700 mb-2"
-                  >
-                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                      selected.size === publishedDrafts.length
-                        ? 'bg-sky-500 border-sky-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {selected.size === publishedDrafts.length && (
-                        <CheckCircle className="w-2.5 h-2.5 text-white" />
-                      )}
-                    </span>
-                    すべて選択 / 解除
-                  </button>
+                  {/* 全選択（表示中の記事のみ） */}
+                  {visibleDrafts.length > 0 && (
+                    <button
+                      onClick={toggleAll}
+                      className="flex items-center gap-2 text-xs text-sky-500 hover:text-sky-700 mb-2"
+                    >
+                      <span className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                        selected.size === publishedDrafts.length
+                          ? 'bg-sky-500 border-sky-500'
+                          : 'border-gray-300'
+                      }`}>
+                        {selected.size === publishedDrafts.length && (
+                          <CheckCircle className="w-2.5 h-2.5 text-white" />
+                        )}
+                      </span>
+                      すべて選択 / 解除
+                    </button>
+                  )}
 
-                  {/* 記事リスト */}
-                  {publishedDrafts.map(draft => {
+                  {/* 変更ありが 0 件の場合 */}
+                  {changedDrafts.length === 0 && !showUnchanged && (
+                    <p className="text-sm text-gray-400 py-3 text-center">
+                      前回から変更された記事はないよ
+                    </p>
+                  )}
+
+                  {/* 記事リスト（変更ありのみ or 全件） */}
+                  {visibleDrafts.map(draft => {
                     const isChecked  = selected.has(draft.id)
                     const changed    = isChanged(draft)
                     const date = new Date(draft.publishedAt ?? draft.updatedAt).toLocaleDateString('ja-JP', {
@@ -286,6 +290,18 @@ function DeploySelectModal({ onClose }) {
                     )
                   })}
                 </div>
+
+                {/* 変更なし記事の折りたたみ */}
+                {unchangedCount > 0 && (
+                  <button
+                    onClick={() => setShowUnchanged(v => !v)}
+                    className="w-full text-xs text-gray-400 hover:text-sky-500 transition-colors py-2 flex items-center justify-center gap-1"
+                  >
+                    {showUnchanged
+                      ? '変更なしの記事を隠す'
+                      : `変更なしの記事（${unchangedCount}件）を表示`}
+                  </button>
+                )}
 
                 {/* 削除待ちの通知（headless モードのみ） */}
                 {isHeadless && pendingDeletions.length > 0 && (

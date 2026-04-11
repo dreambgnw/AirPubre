@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { KeyRound, Eye, EyeOff, ShieldAlert, ChevronRight } from 'lucide-react'
+import { KeyRound, Eye, EyeOff, ShieldAlert, ChevronRight, Fingerprint } from 'lucide-react'
 import { verifyKey } from '../lib/crypto.js'
-import { getAuthInfo } from '../lib/storage.js'
+import { getAuthInfo, getPasskeyCredentials } from '../lib/storage.js'
+import { isPasskeySupported, authenticatePasskey } from '../lib/passkey.js'
 
 /**
  * ログイン方式
@@ -27,10 +28,31 @@ export default function Login({ onLogin, privileged = false }) {
   const [showKey, setShowKey] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hasPasskey, setHasPasskey] = useState(false)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
 
   useEffect(() => {
     setChallengeIdx(pickChallengeIndices())
+    // パスキーが登録済みか確認
+    if (isPasskeySupported()) {
+      getPasskeyCredentials().then(creds => {
+        if (creds.length > 0) setHasPasskey(true)
+      })
+    }
   }, [])
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true)
+    setError('')
+    try {
+      const credentials = await getPasskeyCredentials()
+      await authenticatePasskey(credentials)
+      onLogin({ level: 'normal' })
+    } catch (e) {
+      setError(e.message || 'パスキー認証に失敗しました')
+    }
+    setPasskeyLoading(false)
+  }
 
   const handleSubKeyLogin = async () => {
     if (!subKeyInput.trim()) return
@@ -104,7 +126,29 @@ export default function Login({ onLogin, privileged = false }) {
         </span>
       </header>
 
-      <main className="flex-1 px-4 pb-8 max-w-md mx-auto w-full">
+      <main className="flex-1 px-4 pb-8 max-w-md mx-auto w-full space-y-4">
+
+        {/* パスキーログイン */}
+        {hasPasskey && (
+          <div className="bg-white rounded-2xl border border-sky-100 shadow-sm p-5 space-y-3">
+            <button
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading}
+              className="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
+            >
+              {passkeyLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Fingerprint className="w-5 h-5" />
+                  パスキーでログイン
+                </>
+              )}
+            </button>
+            {error && !tab && <p className="text-xs text-red-500 text-center">{error}</p>}
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl border border-sky-100 shadow-sm overflow-hidden">
 
           {/* タブ */}

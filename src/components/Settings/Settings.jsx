@@ -7,12 +7,14 @@ import {
   Globe, User, Search, PenLine, Server,
   Github, Save, CheckCircle, ChevronDown, ChevronRight,
   Eye, EyeOff, Tag, Plus, X, Trash2, Copy, RefreshCw,
-  FileText, Loader2, Pencil,
+  FileText, Loader2, Pencil, Fingerprint,
 } from 'lucide-react'
 import {
   getSiteConfig, saveSiteConfig, DEFAULT_SITE_CONFIG,
   getMetaTemplates, saveMetaTemplate, deleteMetaTemplate, BUILTIN_META_TEMPLATES,
+  getPasskeyCredentials, addPasskeyCredential, removePasskeyCredential,
 } from '../../lib/storage.js'
+import { isPasskeySupported, registerPasskey } from '../../lib/passkey.js'
 import { importFromGitHub } from '../../lib/githubImporter.js'
 import { fetchRepoFile, pushRepoFile } from '../../lib/githubFile.js'
 import { applyAdminTheme } from '../../lib/theme.js'
@@ -149,6 +151,87 @@ function Section({ icon: Icon, title, color = 'sky', defaultOpen = true, childre
           {children}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── パスキー管理 ─────────────────────────────────────────────────
+
+function PasskeyManager() {
+  const [credentials, setCredentials] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const supported = isPasskeySupported()
+
+  useEffect(() => {
+    getPasskeyCredentials().then(setCredentials)
+  }, [])
+
+  const handleRegister = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const credential = await registerPasskey('AirPubre User')
+      await addPasskeyCredential(credential)
+      setCredentials(await getPasskeyCredentials())
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') {
+        setError(e.message || 'パスキーの登録に失敗しました')
+      }
+    }
+    setLoading(false)
+  }
+
+  const handleRemove = async (credentialId) => {
+    if (!confirm('このパスキーを削除しますか？')) return
+    await removePasskeyCredential(credentialId)
+    setCredentials(await getPasskeyCredentials())
+  }
+
+  if (!supported) {
+    return <p className="text-xs text-gray-400">この環境ではパスキーを利用できません。</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {credentials.length > 0 && (
+        <div className="space-y-2">
+          {credentials.map((c, i) => (
+            <div key={c.credentialId} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Fingerprint className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-700 font-medium">パスキー {i + 1}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {c.createdAt ? new Date(c.createdAt).toLocaleDateString('ja-JP') + ' 登録' : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleRemove(c.credentialId)}
+                className="text-gray-300 hover:text-red-400 transition-colors p-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={handleRegister}
+        disabled={loading}
+        className="flex items-center gap-2 text-sm font-medium text-indigo-500 hover:text-indigo-700 transition-colors disabled:opacity-50"
+      >
+        {loading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Plus className="w-4 h-4" />
+        )}
+        パスキーを追加
+      </button>
+
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   )
 }
@@ -650,7 +733,15 @@ export default function Settings() {
         />
       </Section>
 
-      {/* ⑦ meta タグテンプレート */}
+      {/* ⑦ パスキー管理 */}
+      <Section icon={Fingerprint} title="パスキー" color="indigo" defaultOpen={false}>
+        <p className="text-xs text-gray-500 -mt-1">
+          生体認証やパスワードマネージャーでかんたんにログインできます。
+        </p>
+        <PasskeyManager />
+      </Section>
+
+      {/* ⑧ meta タグテンプレート */}
       <Section icon={Tag} title="meta タグテンプレート" color="sky" defaultOpen={false}>
         <p className="text-xs text-gray-500 -mt-1">
           よく使う meta タグのセットをテンプレートとして登録しておくと、記事エディターからワンクリックで適用できます。

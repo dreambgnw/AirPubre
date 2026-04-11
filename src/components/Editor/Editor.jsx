@@ -266,7 +266,7 @@ export default function Editor({ draft, onBack }) {
   const [rawHtmlEdit, setRawHtmlEdit] = useState(() => mdToHtml(draft?.body ?? ''))
   const [saving, setSaving]   = useState(false)
   const [lastSaved, setLastSaved] = useState(null)
-  const [draftId] = useState(draft?.id ?? null)
+  const [draftId, setDraftId] = useState(draft?.id ?? null)
   const [status, setStatus]   = useState(draft?.status ?? 'draft')
 
   // 公開済みフラッシュ
@@ -315,7 +315,7 @@ export default function Editor({ draft, onBack }) {
     const timer = setTimeout(async () => {
       if (!title && !effectiveBody) return
       setSaving(true)
-      await saveDraft({
+      const saved = await saveDraft({
         id: draftId, title, body: effectiveBody,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         slug, summary, thumbnail: ogImage, customMeta, status,
@@ -323,6 +323,7 @@ export default function Editor({ draft, onBack }) {
         scheduledAt: scheduledAt || null,
         seoKeyword: seoKeyword || null,
       })
+      if (!draftId && saved.id) setDraftId(saved.id)
       setLastSaved(new Date())
       setSaving(false)
     }, 3000)
