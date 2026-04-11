@@ -866,7 +866,7 @@ function HeadlessRepoFileSection({ config, onChangeFiles }) {
         <h4 className="text-sm font-semibold text-gray-700">リポジトリファイル直接編集</h4>
       </div>
       <p className="text-xs text-gray-500 leading-relaxed">
-        <span className="font-mono">now.json</span> や <span className="font-mono">.airpubre/config.json</span> など、
+        <span className="font-mono">now.json</span> や <span className="font-mono">airpubre/config.json</span> など、
         記事ではないけど頻繁に書き換えたいファイルを登録しておくと、AirPubre から直接編集 → push できます。
       </p>
 

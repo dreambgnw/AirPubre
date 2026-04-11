@@ -23,13 +23,13 @@ async function buildSyncFiles(config) {
   } = config
   const result = new Map()
   // 平文 config.json（後方互換・GitHub API 経由の auto-pull 用）
-  result.set('.airpubre/config.json', JSON.stringify(safe, null, 2))
+  result.set('airpubre/config.json', JSON.stringify(safe, null, 2))
   // 暗号化版（syncPassphrase が設定されていればそれで暗号化、なければスキップ）
   // syncPassphrase はユーザーが設定画面で指定する同期用パスフレーズ
   try {
     if (config.syncPassphrase) {
       const encrypted = await encryptSyncConfig(safe, config.syncPassphrase)
-      result.set('.airpubre/sync.enc', encrypted)
+      result.set('airpubre/sync.enc', encrypted)
     }
   } catch (_) { /* 暗号化失敗時はスキップ */ }
   return result
@@ -133,7 +133,7 @@ export async function deployHeadless(drafts, config) {
     if (pd.thumbnailFilename) deletions.push(`${thumbDir}/${pd.thumbnailFilename}`)
   }
 
-  // .airpubre/config.json + sync.enc を同梱（クロスデバイス同期用）
+  // airpubre/config.json + sync.enc を同梱（クロスデバイス同期用）
   const syncFiles = await buildSyncFiles(config)
   for (const [path, content] of syncFiles) files.set(path, content)
 

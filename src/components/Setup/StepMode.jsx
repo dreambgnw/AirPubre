@@ -22,10 +22,10 @@ export default function StepMode({ next }) {
     setSyncLoading(true)
     try {
       // 1. サイト URL から暗号化ファイルを取得
-      const encUrl = `${baseUrl}/.airpubre/sync.enc`
+      const encUrl = `${baseUrl}/airpubre/sync.enc`
       const res = await fetch(encUrl)
       if (!res.ok) throw new Error(res.status === 404
-        ? '.airpubre/sync.enc が見つかりません。先に別デバイスからデプロイしてください。'
+        ? 'airpubre/sync.enc が見つかりません。先に別デバイスからデプロイしてください。'
         : `取得に失敗しました (${res.status})`)
       const encrypted = await res.text()
 

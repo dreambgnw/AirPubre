@@ -104,7 +104,7 @@ src/
 1. **Setup** — マスターキー（ひらがな12語）を生成、PBKDF2で暗号化保管。パスキー登録もオプションで可能。GitHubトークン・リポジトリもウィザード内で設定可能
 2. **Write** — IndexedDBに下書き保存。Markdown / リッチテキスト切り替え可。タグは使用頻度順にサジェスト
 3. **Build** — ブラウザ内で `marked` → HTML化、テーマCSSを適用
-4. **Deploy** — GitHub Pages / Vercel / ZIP / ヘッドレスGitHubから選択。`.airpubre/sync.enc`（AES-GCM暗号化設定）を自動同梱
+4. **Deploy** — GitHub Pages / Vercel / ZIP / ヘッドレスGitHubから選択。`airpubre/sync.enc`（AES-GCM暗号化設定）を自動同梱
 5. **Sync** — 起動時に自動pull、競合があればモーダルで解決。新デバイスではサイトURLと同期パスフレーズで設定をインポート
 6. **Login** — パスキー（WebAuthn）/ サブキー / マスターキーの3段階認証
 
@@ -125,7 +125,7 @@ src/
 - [x] タグサジェスト（使用頻度順提案 + クリック追加）
 - [x] サムネイル形式指定（WebP / PNG / JPEG / original）
 - [x] セットアップウィザードに GitHub 認証情報ステップ追加
-- [x] クロスデバイス設定同期（`.airpubre/config.json`）
+- [x] クロスデバイス設定同期（`airpubre/config.json`）
 - [x] インポート時の既存記事フロントマター保持（date→updated、タグ保持）
 - [x] 著者ページ URL のカスタム指定
 - [x] rsync 廃止 → ZIP に統一

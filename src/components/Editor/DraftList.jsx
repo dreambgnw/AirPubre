@@ -101,13 +101,13 @@ function DeploySelectModal({ onClose }) {
         for (const [path, content] of syncFiles) files.set(path, content)
       }
 
-      // クロスデバイス同期用 .airpubre/sync.enc（syncPassphrase で暗号化した設定）
+      // クロスデバイス同期用 airpubre/sync.enc（syncPassphrase で暗号化した設定）
       if (siteConfig.syncPassphrase) {
         try {
           const { githubToken: _t, vercelToken: _v, syncPassphrase: _s, ...safe } = siteConfig
           const encrypted = await encryptSyncConfig(safe, siteConfig.syncPassphrase)
-          files.set('.airpubre/sync.enc', encrypted)
-          files.set('.airpubre/config.json', JSON.stringify(safe, null, 2))
+          files.set('airpubre/sync.enc', encrypted)
+          files.set('airpubre/config.json', JSON.stringify(safe, null, 2))
         } catch (_) { /* 暗号化失敗時は skip */ }
       }
 

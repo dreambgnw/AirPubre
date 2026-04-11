@@ -173,10 +173,10 @@ export async function importFromGitHub(opts) {
 
   onProgress?.({ done: files.length, total: files.length, name: '' })
 
-  // .airpubre/config.json があれば取得して返す（クロスデバイス同期用）
+  // airpubre/config.json があれば取得して返す（クロスデバイス同期用）
   let remoteConfig = null
   try {
-    const cfgRaw = await fetchRaw({ owner, repo, branch, path: '.airpubre/config.json', token })
+    const cfgRaw = await fetchRaw({ owner, repo, branch, path: 'airpubre/config.json', token })
     remoteConfig = JSON.parse(cfgRaw)
   } catch (_) { /* ファイルがなくても無視 */ }
 

@@ -251,7 +251,7 @@ export default function AdminShell({ authLevel, onElevate }) {
         })
         if (cancelled) return
 
-        // .airpubre/config.json があれば非秘匿設定をマージ（空の項目のみ埋める）
+        // airpubre/config.json があれば非秘匿設定をマージ（空の項目のみ埋める）
         if (result.remoteConfig) {
           const current = await getSiteConfig()
           const merged = { ...current }
