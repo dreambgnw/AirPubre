@@ -17,10 +17,11 @@
 function quote(value) {
   if (value == null) return ''
   const s = String(value)
-  // クォートが必要なケース：英数記号以外を含む or 先頭が特殊
-  if (/^[\w\-./:+]+$/.test(s)) return s
-  // ダブルクォート内のエスケープ
-  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  // クォートが必要なケース：YAML 特殊文字を含む場合のみ
+  if (/[:#\[\]{}&*!|>'"%@`]/.test(s) || /^[\s-]/.test(s)) {
+    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  }
+  return s
 }
 
 /**
@@ -39,7 +40,10 @@ export function serializeHeadlessMarkdown(draft, opts = {}) {
   const dateRaw = draft.scheduledAt || draft.publishedAt || draft.createdAt
   if (dateRaw) {
     const d = new Date(dateRaw)
-    if (!isNaN(d.getTime())) lines.push(`date: ${d.toISOString()}`)
+    if (!isNaN(d.getTime())) {
+      // ミリ秒を除去: 2026-04-11T05:33:58Z
+      lines.push(`date: ${d.toISOString().replace(/\.\d{3}Z$/, 'Z')}`)
+    }
   }
 
   // tags：ブロック形式

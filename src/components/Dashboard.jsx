@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { FileText, Globe, Edit3, Clock, Plus, Upload, RefreshCw } from 'lucide-react'
-import { getDrafts } from '../lib/storage.js'
+import { FileText, Globe, Edit3, Clock, Plus, Upload, RefreshCw, Loader2, Save, CheckCircle, X, Zap } from 'lucide-react'
+import { getDrafts, getSiteConfig } from '../lib/storage.js'
+import { fetchRepoFile, pushRepoFile } from '../lib/githubFile.js'
 
 function StatCard({ icon: Icon, label, value, color = 'sky' }) {
   const colors = {
@@ -61,6 +62,173 @@ function RecentArticleRow({ draft, onOpen }) {
         {isPublished ? '掲載済み' : '下書き'}
       </span>
     </button>
+  )
+}
+
+// ── /now ウィジェット ──────────────────────────────────────────────
+
+function NowEditor() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+  const [config, setConfig] = useState(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    getSiteConfig().then(cfg => {
+      setConfig(cfg)
+      if (cfg.deployTarget !== 'headless-github' || !cfg.githubToken) {
+        setLoading(false)
+        return
+      }
+      const [owner, repo] = (cfg.githubRepo ?? '').split('/')
+      if (!owner || !repo) { setLoading(false); return }
+      fetchRepoFile({ owner, repo, branch: cfg.githubBranch || 'main', path: 'now.json', token: cfg.githubToken })
+        .then(text => {
+          if (text) setData(JSON.parse(text))
+          setLoading(false)
+        })
+        .catch(() => setLoading(false))
+    })
+  }, [])
+
+  if (loading || !config || config.deployTarget !== 'headless-github' || !data) return null
+
+  const updateField = (key, value) => {
+    setData(d => ({ ...d, [key]: value }))
+    setSaved(false)
+  }
+
+  const updateListItem = (key, idx, value) => {
+    setData(d => {
+      const list = [...(d[key] || [])]
+      list[idx] = value
+      return { ...d, [key]: list }
+    })
+    setSaved(false)
+  }
+
+  const addListItem = (key, empty) => {
+    setData(d => ({ ...d, [key]: [...(d[key] || []), empty] }))
+    setSaved(false)
+  }
+
+  const removeListItem = (key, idx) => {
+    setData(d => ({ ...d, [key]: (d[key] || []).filter((_, i) => i !== idx) }))
+    setSaved(false)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const [owner, repo] = config.githubRepo.split('/')
+      const updated = { ...data, updated: new Date().toISOString().split('T')[0] }
+      await pushRepoFile({
+        owner, repo,
+        branch: config.githubBranch || 'main',
+        path: 'now.json',
+        content: JSON.stringify(updated, null, 4),
+        token: config.githubToken,
+        message: 'update: now.json via AirPubre',
+      })
+      setData(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-sky-50 overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 border-b border-sky-50 hover:bg-sky-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-400" />
+          <h2 className="text-sm font-bold text-gray-700">/now</h2>
+          <span className="text-xs text-gray-400">更新: {data.updated || '—'}</span>
+        </div>
+        <span className={`text-xs text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-4">
+          {/* Music */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-600">Music</label>
+            {(data.music || []).map((m, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <input
+                  value={m.title}
+                  onChange={e => updateListItem('music', i, { ...m, title: e.target.value })}
+                  placeholder="曲名"
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-sky-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+                <input
+                  value={m.artist}
+                  onChange={e => updateListItem('music', i, { ...m, artist: e.target.value })}
+                  placeholder="アーティスト"
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-sky-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+                <button onClick={() => removeListItem('music', i)} className="text-gray-300 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+            <button onClick={() => addListItem('music', { title: '', artist: '' })} className="text-xs text-sky-500 hover:text-sky-700">+ 追加</button>
+          </div>
+
+          {/* Into */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-600">Into</label>
+            {(data.into || []).map((item, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <input
+                  value={item}
+                  onChange={e => updateListItem('into', i, e.target.value)}
+                  placeholder="ハマっていること"
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-sky-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+                <button onClick={() => removeListItem('into', i)} className="text-gray-300 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+            <button onClick={() => addListItem('into', '')} className="text-xs text-sky-500 hover:text-sky-700">+ 追加</button>
+          </div>
+
+          {/* Doing */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-600">Doing</label>
+            {(data.doing || []).map((item, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <input
+                  value={item}
+                  onChange={e => updateListItem('doing', i, e.target.value)}
+                  placeholder="今やっていること"
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-sky-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                />
+                <button onClick={() => removeListItem('doing', i)} className="text-gray-300 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+            <button onClick={() => addListItem('doing', '')} className="text-xs text-sky-500 hover:text-sky-700">+ 追加</button>
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saved ? '保存しました' : '保存して push'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -170,6 +338,9 @@ export default function Dashboard({ onOpen, onNewPost, onImport, onNavigate, ref
           </div>
         )}
       </div>
+
+      {/* ── /now エディター ─────────────────────── */}
+      <NowEditor />
     </div>
   )
 }
