@@ -56,6 +56,7 @@ npm run dev
 ```
 
 Then open `http://localhost:5173` and follow the setup wizard.
+
 初回アクセスでセットアップウィザードが立ち上がります。
 
 ### Build
