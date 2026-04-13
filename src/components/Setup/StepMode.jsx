@@ -1,12 +1,46 @@
-import { useState } from 'react'
-import { Feather, Wrench, RefreshCw, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Feather, Wrench, RefreshCw, Loader2, Wifi } from 'lucide-react'
+import { joinSession } from '../../lib/p2pSync.js'
 
-export default function StepMode({ next }) {
+export default function StepMode({ next, onComplete }) {
   const [showSync, setShowSync] = useState(false)
-  const [syncUrl, setSyncUrl] = useState('')
+  const [syncUrl, setSyncUrl] = useState(location.origin)
   const [syncSubKey, setSyncSubKey] = useState('')
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncError, setSyncError] = useState(null)
+
+  // P2P 同期
+  const [showP2p, setShowP2p] = useState(false)
+  const [p2pCode, setP2pCode] = useState('')
+  const [p2pStatus, setP2pStatus] = useState(null) // null | 'connecting' | 'done' | 'error'
+  const [p2pMsg, setP2pMsg] = useState('')
+  const p2pRef = useRef(null)
+
+  useEffect(() => {
+    return () => p2pRef.current?.cancel()
+  }, [])
+
+  const handleP2pJoin = () => {
+    const code = p2pCode.trim().toUpperCase()
+    if (code.length !== 6) return
+    setP2pStatus('connecting')
+    setP2pMsg('接続中...')
+
+    p2pRef.current = joinSession(code, {
+      includeAuth: true,
+      onStatus: setP2pMsg,
+      onComplete: () => {
+        setP2pStatus('done')
+        setP2pMsg('同期完了！')
+        // 鍵もセットアップ状態も転送済み → セットアップ完了
+        setTimeout(() => onComplete?.(), 1000)
+      },
+      onError: (msg) => {
+        setP2pStatus('error')
+        setP2pMsg(msg)
+      },
+    })
+  }
 
   const handleSync = async () => {
     setSyncError(null)
@@ -49,9 +83,9 @@ export default function StepMode({ next }) {
       }
       await saveSiteConfig(merged)
 
-      // mode を判定して次のステップへ
+      // mode を判定して次のステップへ（同期インポートフラグ付き）
       const mode = merged.deployTarget === 'github' || merged.deployTarget === 'headless-github' ? 'pro' : 'easy'
-      next({ mode, deployTarget: merged.deployTarget })
+      next({ mode, deployTarget: merged.deployTarget, syncImport: true })
     } catch (e) {
       setSyncError(e.message)
     } finally {
@@ -105,13 +139,77 @@ export default function StepMode({ next }) {
       <p className="text-center text-xs text-gray-400 pt-2">あとから変更することもできます</p>
 
       {/* 別デバイスからの同期 */}
-      <div className="border-t border-sky-100 pt-4">
+      <div className="border-t border-sky-100 pt-4 space-y-2">
+        {/* P2P 同期（推奨） */}
         <button
-          onClick={() => setShowSync(v => !v)}
+          onClick={() => { setShowP2p(v => !v); setShowSync(false) }}
           className="w-full flex items-center justify-center gap-1.5 text-xs text-sky-500 hover:text-sky-700 transition-colors"
         >
+          <Wifi className="w-3.5 h-3.5" />
+          別のデバイスから P2P で同期
+        </button>
+
+        {showP2p && (
+          <div className="mt-2 p-4 rounded-2xl border border-sky-100 bg-sky-50/40 space-y-3">
+            {!p2pStatus && (
+              <>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  もう一方のデバイスの設定画面で「P2P 同期」→「ホスト」を開き、表示された6文字のコードを入力してください。
+                  鍵・設定・記事がすべて転送されます。
+                </p>
+                <input
+                  type="text"
+                  value={p2pCode}
+                  onChange={e => setP2pCode(e.target.value.toUpperCase().slice(0, 6))}
+                  placeholder="6文字のコード"
+                  maxLength={6}
+                  className="w-full px-3 py-2.5 rounded-xl border border-sky-200 text-center text-lg font-mono tracking-[0.3em] bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 uppercase"
+                />
+                <button
+                  onClick={handleP2pJoin}
+                  disabled={p2pCode.trim().length !== 6}
+                  className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
+                    p2pCode.trim().length === 6
+                      ? 'bg-sky-500 hover:bg-sky-600 text-white'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  接続して同期
+                </button>
+              </>
+            )}
+            {p2pStatus === 'connecting' && (
+              <div className="flex items-center justify-center gap-2 py-3">
+                <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
+                <span className="text-sm text-gray-600">{p2pMsg}</span>
+              </div>
+            )}
+            {p2pStatus === 'done' && (
+              <div className="text-center py-3">
+                <p className="text-sm text-green-600 font-medium">{p2pMsg}</p>
+              </div>
+            )}
+            {p2pStatus === 'error' && (
+              <div className="space-y-2">
+                <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{p2pMsg}</p>
+                <button
+                  onClick={() => { setP2pStatus(null); setP2pMsg('') }}
+                  className="text-xs text-sky-500 hover:text-sky-700"
+                >
+                  やり直す
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 従来の暗号化ファイル同期 */}
+        <button
+          onClick={() => { setShowSync(v => !v); setShowP2p(false) }}
+          className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
           <RefreshCw className="w-3.5 h-3.5" />
-          別のデバイスで設定済みですか？
+          暗号化ファイルから設定をインポート
         </button>
 
         {showSync && (

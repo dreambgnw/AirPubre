@@ -23,8 +23,15 @@ export default function SetupWizard({ onComplete }) {
   })
 
   const next = (patch = {}) => {
-    setData(d => ({ ...d, ...patch }))
-    setStep(s => Math.min(s + 1, STEPS.length - 1))
+    const merged = { ...data, ...patch }
+    setData(merged)
+    // 同期インポート時は subKey の次で done にスキップ
+    const currentStep = STEPS[step]
+    if (merged.syncImport && currentStep === 'subKey') {
+      setStep(STEPS.indexOf('done'))
+    } else {
+      setStep(s => Math.min(s + 1, STEPS.length - 1))
+    }
   }
 
   const stepProps = { data, next, onComplete }

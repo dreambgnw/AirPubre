@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { hashKey } from '../../lib/crypto.js'
 import { saveAuthInfo, saveSetupState, getSiteConfig, saveSiteConfig } from '../../lib/storage.js'
+import { importFromGitHub } from '../../lib/githubImporter.js'
 
 const BACKGROUND_LABELS = {
   obsidian:  'Obsidian',
@@ -18,6 +19,7 @@ const DEPLOY_LABELS = {
 export default function StepDone({ data, onComplete }) {
   const [saving, setSaving] = useState(true)
   const [error, setError] = useState(null)
+  const [pullStatus, setPullStatus] = useState(null) // null | 'running' | { imported, skipped, total }
 
   useEffect(() => {
     async function finalize() {
@@ -59,6 +61,28 @@ export default function StepDone({ data, onComplete }) {
           }),
         })
         setSaving(false)
+
+        // 同期インポート時：GitHub から記事を自動 pull
+        if (data.syncImport) {
+          const cfg = await getSiteConfig()
+          const [owner, repo] = (cfg.githubRepo ?? '').split('/')
+          if (owner && repo && cfg.githubToken) {
+            setPullStatus('running')
+            try {
+              const result = await importFromGitHub({
+                owner, repo,
+                branch: cfg.githubBranch || 'main',
+                postsDir: cfg.headlessPostsDir,
+                thumbnailsDir: cfg.headlessThumbnailsDir,
+                token: cfg.githubToken,
+                thumbnailFormat: cfg.headlessThumbnailFormat || 'webp',
+              })
+              setPullStatus({ imported: result.imported, skipped: result.skipped, total: result.total })
+            } catch (e) {
+              setPullStatus({ error: e.message })
+            }
+          }
+        }
       } catch (e) {
         setError(e.message)
         setSaving(false)
@@ -131,6 +155,27 @@ export default function StepDone({ data, onComplete }) {
           </div>
         </div>
       </div>
+
+      {pullStatus === 'running' && (
+        <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-sky-700">GitHub から記事をインポート中...</p>
+        </div>
+      )}
+      {pullStatus && pullStatus !== 'running' && !pullStatus.error && (
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+          <p className="text-sm text-green-700 font-medium">
+            {pullStatus.imported} 件の記事をインポートしました
+            {pullStatus.skipped > 0 && <span className="text-green-500">（{pullStatus.skipped} 件スキップ）</span>}
+          </p>
+        </div>
+      )}
+      {pullStatus && pullStatus.error && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <p className="text-xs text-amber-700">記事の自動インポートに失敗しました: {pullStatus.error}</p>
+          <p className="text-xs text-amber-500 mt-1">管理画面のインポート機能から手動で取り込めます。</p>
+        </div>
+      )}
 
       {vercelGitHubHint && (
         <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-left">

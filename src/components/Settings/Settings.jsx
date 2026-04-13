@@ -7,7 +7,7 @@ import {
   Globe, User, Search, PenLine, Server,
   Github, Save, CheckCircle, ChevronDown, ChevronRight,
   Eye, EyeOff, Tag, Plus, X, Trash2, Copy, RefreshCw,
-  FileText, Loader2, Pencil, Fingerprint,
+  FileText, Loader2, Pencil, Fingerprint, Wifi,
 } from 'lucide-react'
 import {
   getSiteConfig, saveSiteConfig, DEFAULT_SITE_CONFIG,
@@ -19,6 +19,7 @@ import { importFromGitHub } from '../../lib/githubImporter.js'
 import { fetchRepoFile, pushRepoFile } from '../../lib/githubFile.js'
 import { applyAdminTheme } from '../../lib/theme.js'
 import SyncSection from './SyncSection.jsx'
+import P2PSyncSection from './P2PSyncSection.jsx'
 
 // ── 入力フィールド部品 ────────────────────────────────────────────
 
@@ -733,7 +734,12 @@ export default function Settings() {
         />
       </Section>
 
-      {/* ⑦ パスキー管理 */}
+      {/* ⑦ P2P 同期 */}
+      <Section icon={Wifi} title="P2P 同期（WebRTC）" color="teal" defaultOpen={false}>
+        <P2PSyncSection />
+      </Section>
+
+      {/* ⑧ パスキー管理 */}
       <Section icon={Fingerprint} title="パスキー" color="indigo" defaultOpen={false}>
         <p className="text-xs text-gray-500 -mt-1">
           生体認証やパスワードマネージャーでかんたんにログインできます。

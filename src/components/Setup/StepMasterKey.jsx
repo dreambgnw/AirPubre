@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react'
 import { generateMasterKey } from '../../lib/crypto.js'
+import { wordsToKeyString } from '../../words/hiragana.js'
 
-export default function StepMasterKey({ next }) {
+export default function StepMasterKey({ data, next }) {
+  const isSyncImport = !!data?.syncImport
+
+  // 新規作成モード
   const [key, setKey] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  // 入力モード（同期インポート時）
+  const [inputValue, setInputValue] = useState('')
+  const [inputError, setInputError] = useState(null)
+
   useEffect(() => {
-    setKey(generateMasterKey())
+    if (!isSyncImport) setKey(generateMasterKey())
   }, [])
 
   const handleCopy = () => {
@@ -21,6 +29,69 @@ export default function StepMasterKey({ next }) {
     setConfirmed(false)
   }
 
+  const handleInputSubmit = () => {
+    const trimmed = inputValue.trim()
+    if (!trimmed) {
+      setInputError('マスターキーを入力してください')
+      return
+    }
+    // 「・」区切りで12単語かチェック
+    const words = trimmed.split('・').map(w => w.trim()).filter(Boolean)
+    if (words.length !== 12) {
+      setInputError('12単語を「・」区切りで入力してください')
+      return
+    }
+    setInputError(null)
+    next({ masterKey: { words, keyString: wordsToKeyString(words) } })
+  }
+
+  // ── 同期インポート：入力モード ──
+  if (isSyncImport) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-gray-800">マスターキーを入力</h2>
+          <p className="text-sm text-gray-500">
+            別のデバイスで作成したマスターキー（12単語）を<br />
+            そのまま入力してください。
+          </p>
+        </div>
+
+        <div className="bg-white border-2 border-sky-200 rounded-2xl p-5 space-y-4">
+          <textarea
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            placeholder="あいう・えおか・きくけ・…（12単語を・区切りで）"
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 resize-none"
+          />
+          {inputError && (
+            <p className="text-xs text-rose-600">{inputError}</p>
+          )}
+        </div>
+
+        <div className="bg-sky-50 rounded-xl p-4">
+          <p className="text-xs text-gray-500 leading-relaxed">
+            同じマスターキーを使うことで、別デバイスと同じ認証情報でログインできます。
+          </p>
+        </div>
+
+        <button
+          onClick={handleInputSubmit}
+          disabled={!inputValue.trim()}
+          className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
+            inputValue.trim()
+              ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          次へ →
+        </button>
+      </div>
+    )
+  }
+
+  // ── 通常：新規作成モード ──
   if (!key) return null
 
   return (

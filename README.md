@@ -19,6 +19,12 @@ A fully browser-based Markdown CMS for solo writers. No server, no database. Dra
 
 ---
 
+## 📸 Screenshots
+
+| ダッシュボード | エディタ | 設定 |
+|---|---|---|
+| ![dashboard](docs/screenshots/dashboard.png) | ![editor](docs/screenshots/editor.png) | ![settings](docs/screenshots/settings.png) |
+
 ## ✨ Features / 機能
 
 | | |
@@ -133,7 +139,7 @@ src/
 - [x] パスキー認証（WebAuthn — セットアップ/ログイン/設定管理）
 - [x] デプロイリストのスマートフィルタ（変更ありのみ表示）
 - [x] 自動保存の重複修正
-- [ ] エンタープライズ対応（共同編集・権限管理）— Issueベースで対応
+- [-] エンタープライズ対応（共同編集・権限管理）— Issueベースで対応 <- No add-on
 
 ---
 

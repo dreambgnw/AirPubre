@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { KeyRound, Eye, EyeOff, ShieldAlert, ChevronRight, Fingerprint } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { KeyRound, Eye, EyeOff, ShieldAlert, ChevronRight, Fingerprint, Wifi, Loader2 } from 'lucide-react'
 import { verifyKey } from '../lib/crypto.js'
 import { getAuthInfo, getPasskeyCredentials } from '../lib/storage.js'
 import { isPasskeySupported, authenticatePasskey } from '../lib/passkey.js'
+import { joinSession } from '../lib/p2pSync.js'
 
 /**
  * ログイン方式
@@ -30,6 +31,37 @@ export default function Login({ onLogin, privileged = false }) {
   const [loading, setLoading] = useState(false)
   const [hasPasskey, setHasPasskey] = useState(false)
   const [passkeyLoading, setPasskeyLoading] = useState(false)
+  const [p2pOpen, setP2pOpen] = useState(false)
+  const [p2pCode, setP2pCode] = useState('')
+  const [p2pStatus, setP2pStatus] = useState(null) // null | 'connecting' | 'syncing' | 'done' | 'error'
+  const [p2pMsg, setP2pMsg] = useState('')
+  const p2pSessionRef = useRef(null)
+
+  const handleP2pJoin = () => {
+    const code = p2pCode.trim().toUpperCase()
+    if (code.length !== 6) return
+    setP2pStatus('connecting')
+    setP2pMsg('接続中...')
+    setError('')
+
+    p2pSessionRef.current = joinSession(code, {
+      includeAuth: true,
+      onStatus: (msg) => { setP2pStatus('syncing'); setP2pMsg(msg) },
+      onComplete: () => {
+        setP2pStatus('done')
+        setP2pMsg('同期完了！ログインします...')
+        setTimeout(() => onLogin({ level: 'normal' }), 1000)
+      },
+      onError: (msg) => {
+        setP2pStatus('error')
+        setP2pMsg(msg)
+      },
+    })
+  }
+
+  useEffect(() => {
+    return () => p2pSessionRef.current?.cancel()
+  }, [])
 
   useEffect(() => {
     setChallengeIdx(pickChallengeIndices())
@@ -324,6 +356,70 @@ export default function Login({ onLogin, privileged = false }) {
             )}
 
           </div>
+        </div>
+
+        {/* P2P 同期 */}
+        <div className="border-t border-sky-100 pt-3">
+          <button
+            onClick={() => { setP2pOpen(v => !v); setP2pStatus(null); setP2pMsg('') }}
+            className="w-full flex items-center justify-center gap-1.5 text-xs text-sky-500 hover:text-sky-700 transition-colors"
+          >
+            <Wifi className="w-3.5 h-3.5" />
+            別のデバイスから P2P 同期
+          </button>
+
+          {p2pOpen && (
+            <div className="mt-3 bg-white rounded-2xl border border-sky-100 shadow-sm p-4 space-y-3">
+              {!p2pStatus && (
+                <>
+                  <p className="text-xs text-gray-500">
+                    もう一方のデバイスの設定画面で「P2P 同期」→「ホスト」を開き、表示されたコードを入力してください。
+                  </p>
+                  <input
+                    type="text"
+                    value={p2pCode}
+                    onChange={e => setP2pCode(e.target.value.toUpperCase().slice(0, 6))}
+                    placeholder="6文字のコード"
+                    maxLength={6}
+                    className="w-full px-3 py-2.5 rounded-xl border border-sky-200 text-center text-lg font-mono tracking-[0.3em] bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 uppercase"
+                  />
+                  <button
+                    onClick={handleP2pJoin}
+                    disabled={p2pCode.trim().length !== 6}
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                      p2pCode.trim().length === 6
+                        ? 'bg-sky-500 hover:bg-sky-600 text-white'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    接続して同期
+                  </button>
+                </>
+              )}
+              {(p2pStatus === 'connecting' || p2pStatus === 'syncing') && (
+                <div className="flex items-center justify-center gap-2 py-3">
+                  <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
+                  <span className="text-sm text-gray-600">{p2pMsg}</span>
+                </div>
+              )}
+              {p2pStatus === 'done' && (
+                <div className="text-center py-3">
+                  <p className="text-sm text-green-600 font-medium">{p2pMsg}</p>
+                </div>
+              )}
+              {p2pStatus === 'error' && (
+                <div className="space-y-2">
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{p2pMsg}</p>
+                  <button
+                    onClick={() => { setP2pStatus(null); setP2pMsg('') }}
+                    className="text-xs text-sky-500 hover:text-sky-700"
+                  >
+                    やり直す
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>
