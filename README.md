@@ -152,5 +152,4 @@ MIT
 
 Built by **Anthropic Claude with shunature(dreambgnw)**.
 
-- Author: [Shun Tonegawa (shunature)](https://github.com/dreambgnw/)
-- Project page: [shunature.one](https://shunature.one/project/airpubre.html)
+- Author: [Shun Tonegawa (shunature)](https://ffnet.work)
