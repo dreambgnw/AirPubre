@@ -19,6 +19,10 @@ A fully browser-based Markdown CMS for solo writers. No server, no database. Dra
 
 ---
 
+> [!NOTE] このリポジトリはアーカイブ済みです。
+
+---
+
 ## 📸 Screenshots
 
 | ダッシュボード | エディタ | 設定 |

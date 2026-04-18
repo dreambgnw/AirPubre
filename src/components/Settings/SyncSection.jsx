@@ -3,9 +3,10 @@
  * パスキー登録 + 同期パスフレーズ設定 + 別端末から取り込む
  */
 import { useState, useEffect } from 'react'
-import { RefreshCw, Smartphone, ShieldCheck, ShieldOff, Download, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
-import { getSyncCredential, saveSyncCredential, importDrafts } from '../../lib/storage.js'
+import { RefreshCw, Smartphone, ShieldCheck, ShieldOff, Download, Eye, EyeOff, CheckCircle, AlertCircle, Loader2, FolderOpen, X } from 'lucide-react'
+import { getSyncCredential, saveSyncCredential, importDrafts, getSiteConfig } from '../../lib/storage.js'
 import { registerSyncPasskey, importFromSyncUrl } from '../../lib/sync.js'
+import { isFSSupported, hasFSAccess, pickFolder, getFolderName, clearDirHandle } from '../../lib/fs.js'
 
 function SecretInput({ value, onChange, placeholder, disabled }) {
   const [show, setShow] = useState(false)
@@ -42,8 +43,28 @@ export default function SyncSection({ syncPassphrase, onPassphraseChange }) {
   const [importMessage, setImportMessage] = useState('')
   const [importCount, setImportCount] = useState(0)
 
+  // FS フォルダ管理
+  const [folderName, setFolderName] = useState(null)
+  const [fsSupported, setFsSupported] = useState(false)
+  const [folderStatus, setFolderStatus] = useState(null) // null | 'picking' | 'ok' | 'error'
+
+  // 設定済み URL をワンクリックインポート用に prefill
+  const [hasSiteUrl, setHasSiteUrl] = useState(false)
+
   useEffect(() => {
     getSyncCredential().then(setCredential)
+    setFsSupported(isFSSupported())
+    getFolderName().then(setFolderName)
+    // siteConfig の baseUrl を importUrl に prefill
+    getSiteConfig().then(cfg => {
+      if (cfg.baseUrl && cfg.baseUrl !== '/') {
+        setImportUrl(cfg.baseUrl.replace(/\/$/, ''))
+        setHasSiteUrl(true)
+      }
+      if (cfg.syncPassphrase) {
+        setImportPassphrase(cfg.syncPassphrase)
+      }
+    })
   }, [])
 
   // ── パスキー登録 ──────────────────────────────────────────────
@@ -83,10 +104,78 @@ export default function SyncSection({ syncPassphrase, onPassphraseChange }) {
     }
   }
 
+  // ── フォルダ操作 ──────────────────────────────────────────────
+
+  const handlePickFolder = async () => {
+    setFolderStatus('picking')
+    try {
+      const handle = await pickFolder()
+      setFolderName(handle.name)
+      setFolderStatus('ok')
+    } catch (e) {
+      if (e.name !== 'AbortError') setFolderStatus('error')
+      else setFolderStatus(null)
+    }
+  }
+
+  const handleClearFolder = async () => {
+    await clearDirHandle()
+    setFolderName(null)
+    setFolderStatus(null)
+  }
+
   const syncReady = credential && syncPassphrase
 
   return (
     <div className="space-y-5">
+      {/* ── フォルダ同期（FS バックエンド） ─────────────────────── */}
+      {fsSupported && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-sky-500" />
+            <label className="text-xs font-semibold text-gray-600">フォルダ同期（iCloud / Dropbox など）</label>
+          </div>
+
+          {folderName ? (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-sky-50 border border-sky-200 rounded-lg">
+              <FolderOpen className="w-4 h-4 text-sky-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-sky-700 truncate">{folderName}</p>
+                <p className="text-xs text-gray-400">記事は .airpubre/ に保存されています</p>
+              </div>
+              <button
+                onClick={handlePickFolder}
+                className="text-xs text-sky-500 hover:text-sky-700 font-medium shrink-0"
+              >
+                変更
+              </button>
+              <button
+                onClick={handleClearFolder}
+                className="text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                title="フォルダ連携を解除"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handlePickFolder}
+              disabled={folderStatus === 'picking'}
+              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-sky-200 text-sky-500 hover:border-sky-400 hover:bg-sky-50 text-sm font-medium px-4 py-3 rounded-xl transition-colors disabled:opacity-50"
+            >
+              {folderStatus === 'picking'
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <FolderOpen className="w-4 h-4" />}
+              {folderStatus === 'picking' ? '選択中...' : 'フォルダを選ぶ'}
+            </button>
+          )}
+          <p className="text-xs text-gray-400">
+            iCloud Drive などの同期フォルダを選ぶと、
+            別デバイスで同じフォルダを選択するだけで記事が共有されます。
+          </p>
+        </div>
+      )}
+
       {/* ── 同期の有効状態 ──────────────────────────────────────── */}
       <div className={`flex items-center gap-3 p-3 rounded-xl ${
         syncReady ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50 border border-gray-200'
@@ -166,11 +255,22 @@ export default function SyncSection({ syncPassphrase, onPassphraseChange }) {
           <p className="text-xs font-semibold text-gray-600">別端末から取り込む</p>
         </div>
 
+        {/* ワンクリックインポート（URL + パスフレーズが設定済みの場合） */}
+        {hasSiteUrl && importPassphrase && importStatus !== 'running' && (
+          <button
+            onClick={handleImport}
+            className="w-full flex items-center justify-center gap-2 border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 text-sm font-semibold py-2.5 rounded-xl transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            ワンクリックで最新を取り込む
+          </button>
+        )}
+
         <div className="space-y-2">
           <input
             type="url"
             value={importUrl}
-            onChange={e => setImportUrl(e.target.value)}
+            onChange={e => { setImportUrl(e.target.value); setHasSiteUrl(false) }}
             placeholder="https://mysite.github.io"
             disabled={importStatus === 'running'}
             className="w-full px-3 py-2 rounded-lg border border-sky-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-50"

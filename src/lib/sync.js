@@ -191,6 +191,35 @@ export async function buildSyncFiles(drafts, passkeyInfo, passphrase) {
   return files
 }
 
+// ── GitHub への同期専用プッシュ ────────────────────────────────
+
+/**
+ * フルデプロイなしで _sync/ ファイルだけ GitHub に push する。
+ * deployTarget が 'github' / 'headless-github' のときに使用。
+ *
+ * PC で下書きを書いた後、すぐにスマホから参照したい場合など
+ * 記事を公開せずに同期データだけ更新したいときに使う。
+ *
+ * @param {Array} drafts - 全記事（下書き含む）
+ * @param {{ credentialId, publicKey, rpId }} passkeyInfo
+ * @param {string} passphrase
+ * @param {{ githubToken, githubRepo, githubBranch }} config
+ */
+export async function syncDraftsToGitHub(drafts, passkeyInfo, passphrase, config) {
+  const { deployToGitHub } = await import('./deploy/github.js')
+  const files = await buildSyncFiles(drafts, passkeyInfo, passphrase)
+  const [owner, repo] = (config.githubRepo ?? '').split('/')
+  if (!owner || !repo) throw new Error('GitHub リポジトリ名が未設定です（設定画面で owner/repo 形式で入力）')
+  if (!config.githubToken) throw new Error('GitHub Token が未設定です')
+  return deployToGitHub(files, {
+    token:  config.githubToken,
+    owner,
+    repo,
+    branch: config.githubBranch || 'gh-pages',
+    message: 'sync: update draft data via AirPubre',
+  })
+}
+
 // ── インポート ────────────────────────────────────────────────────
 
 /**

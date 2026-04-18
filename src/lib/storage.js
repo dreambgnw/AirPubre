@@ -1,9 +1,16 @@
 /**
- * AirPubre ストレージ（IndexedDB）
- * idb ライブラリを使用
+ * AirPubre ストレージ
+ *
+ * バックエンドは2種類：
+ *   1. File System（推奨）: ユーザーが選択したフォルダ内の .airpubre/ に保存。
+ *      iCloud Drive / Dropbox などの同期フォルダを選ぶとデバイス間で自動同期。
+ *   2. IndexedDB（フォールバック）: フォルダ未選択 or FS 非対応ブラウザ。
+ *
+ * 関数シグネチャは同じ。呼び出し側のコードを変更する必要なし。
  */
 
 import { openDB } from 'idb'
+import { hasFSAccess, readFile, writeFile, deleteFile, listFiles } from './fs.js'
 
 const DB_NAME = 'airpubre'
 const DB_VERSION = 3  // v3: pendingDeletions store を追加（headless 削除伝播用）
@@ -51,16 +58,27 @@ export async function saveSetupState(state) {
 }
 
 // ============================================================
-// 認証情報
+// 認証情報（FS / IndexedDB 自動切替）
 // ============================================================
 
 export async function saveAuthInfo({ masterKeyHash, subKeyHash }) {
+  if (await hasFSAccess()) {
+    await writeFile('auth.json', JSON.stringify({ masterKeyHash, subKeyHash }, null, 2))
+    return
+  }
   const db = await getDB()
   await db.put('setup', masterKeyHash, 'masterKeyHash')
   await db.put('setup', subKeyHash, 'subKeyHash')
 }
 
 export async function getAuthInfo() {
+  if (await hasFSAccess()) {
+    const text = await readFile('auth.json')
+    if (text) {
+      try { return JSON.parse(text) } catch {}
+    }
+    return { masterKeyHash: undefined, subKeyHash: undefined }
+  }
   const db = await getDB()
   const [masterKeyHash, subKeyHash] = await Promise.all([
     db.get('setup', 'masterKeyHash'),
@@ -95,10 +113,49 @@ export async function removePasskeyCredential(credentialId) {
 }
 
 // ============================================================
-// 下書き
+// 下書き（FS / IndexedDB 自動切替）
 // ============================================================
 
-export async function saveDraft(draft) {
+// ── FS バックエンド ──────────────────────────────────────────
+
+async function saveDraftFS(draft) {
+  const now = new Date().toISOString()
+  const record = {
+    ...draft,
+    id: draft.id ?? crypto.randomUUID(),
+    updatedAt: now,
+    createdAt: draft.createdAt ?? now,
+  }
+  await writeFile(`drafts/${record.id}.json`, JSON.stringify(record, null, 2))
+  return record
+}
+
+async function getDraftsFS() {
+  const files = await listFiles('drafts')
+  const drafts = []
+  for (const name of files) {
+    if (!name.endsWith('.json')) continue
+    const text = await readFile(`drafts/${name}`)
+    if (text) {
+      try { drafts.push(JSON.parse(text)) } catch {}
+    }
+  }
+  return drafts.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+}
+
+async function getDraftFS(id) {
+  const text = await readFile(`drafts/${id}.json`)
+  if (!text) return undefined
+  try { return JSON.parse(text) } catch { return undefined }
+}
+
+async function deleteDraftFS(id) {
+  await deleteFile(`drafts/${id}.json`)
+}
+
+// ── IndexedDB バックエンド ────────────────────────────────────
+
+async function saveDraftIDB(draft) {
   const db = await getDB()
   const now = new Date().toISOString()
   const record = {
@@ -111,20 +168,42 @@ export async function saveDraft(draft) {
   return record
 }
 
-export async function getDrafts() {
+async function getDraftsIDB() {
   const db = await getDB()
   const all = await db.getAll('drafts')
   return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export async function getDraft(id) {
+async function getDraftIDB(id) {
   const db = await getDB()
   return db.get('drafts', id)
 }
 
-export async function deleteDraft(id) {
+async function deleteDraftIDB(id) {
   const db = await getDB()
   return db.delete('drafts', id)
+}
+
+// ── 公開 API ─────────────────────────────────────────────────
+
+export async function saveDraft(draft) {
+  if (await hasFSAccess()) return saveDraftFS(draft)
+  return saveDraftIDB(draft)
+}
+
+export async function getDrafts() {
+  if (await hasFSAccess()) return getDraftsFS()
+  return getDraftsIDB()
+}
+
+export async function getDraft(id) {
+  if (await hasFSAccess()) return getDraftFS(id)
+  return getDraftIDB(id)
+}
+
+export async function deleteDraft(id) {
+  if (await hasFSAccess()) return deleteDraftFS(id)
+  return deleteDraftIDB(id)
 }
 
 // ============================================================
@@ -236,12 +315,23 @@ export const DEFAULT_SITE_CONFIG = {
 }
 
 export async function getSiteConfig() {
+  if (await hasFSAccess()) {
+    const text = await readFile('config.json')
+    if (text) {
+      try { return { ...DEFAULT_SITE_CONFIG, ...JSON.parse(text) } } catch {}
+    }
+    return { ...DEFAULT_SITE_CONFIG }
+  }
   const db = await getDB()
   const stored = await db.get('settings', 'siteConfig')
   return { ...DEFAULT_SITE_CONFIG, ...(stored ?? {}) }
 }
 
 export async function saveSiteConfig(config) {
+  if (await hasFSAccess()) {
+    await writeFile('config.json', JSON.stringify(config, null, 2))
+    return
+  }
   const db = await getDB()
   await db.put('settings', config, 'siteConfig')
 }
@@ -331,20 +421,72 @@ export async function saveSyncCredential(cred) {
 }
 
 /**
+ * ローカルの重複下書きを自動削除する。
+ *
+ * slug が同じ記事が複数ある場合、updatedAt が最も新しいものだけを残して他を削除する。
+ * slug なし記事（タイトルのみの下書きなど）は対象外。
+ *
+ * @returns {number} 削除した件数
+ */
+export async function deduplicateDrafts() {
+  const drafts = await getDrafts()
+  /** @type {Map<string, Array>} */
+  const bySlug = new Map()
+  for (const d of drafts) {
+    if (!d.slug) continue
+    if (!bySlug.has(d.slug)) bySlug.set(d.slug, [])
+    bySlug.get(d.slug).push(d)
+  }
+
+  let deleted = 0
+  for (const group of bySlug.values()) {
+    if (group.length <= 1) continue
+    // updatedAt 降順にソート → 先頭（最新）以外を削除
+    group.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+    for (const dup of group.slice(1)) {
+      await deleteDraft(dup.id)
+      deleted++
+    }
+  }
+  return deleted
+}
+
+/**
  * リモートの記事をローカルにマージ（updatedAt が新しい方を優先）
+ *
+ * 重複解消ルール:
+ *   1. id が同じ → updatedAt が新しい方で上書き
+ *   2. id が違うが slug が同じ → updatedAt が新しい方を残し、古い方の id を削除
+ *   3. まったく新しい → そのまま追加
+ *
  * @param {Array} remoteDrafts
  * @returns {number} インポートした件数
  */
 export async function importDrafts(remoteDrafts) {
-  const db = await getDB()
-  const existing = await db.getAll('drafts')
-  const map = new Map(existing.map(d => [d.id, d]))
+  const existing = await getDrafts()
+  const idMap   = new Map(existing.map(d => [d.id, d]))
+  const slugMap = new Map(existing.filter(d => d.slug).map(d => [d.slug, d]))
 
   let count = 0
   for (const remote of remoteDrafts) {
-    const local = map.get(remote.id)
-    if (!local || (remote.updatedAt ?? '') > (local.updatedAt ?? '')) {
-      await db.put('drafts', remote)
+    const localById   = idMap.get(remote.id)
+    const localBySlug = remote.slug ? slugMap.get(remote.slug) : null
+
+    // slug が同じ別 ID のローカル記事がある（重複）
+    if (localBySlug && localBySlug.id !== remote.id) {
+      if ((remote.updatedAt ?? '') >= (localBySlug.updatedAt ?? '')) {
+        // リモートの方が新しい → ローカルの古い方を削除してリモートで置き換え
+        await deleteDraft(localBySlug.id)
+        await saveDraft({ ...remote, updatedAt: remote.updatedAt }) // updatedAt を保持
+        count++
+      }
+      // ローカルの方が新しい場合は何もしない
+      continue
+    }
+
+    // id 一致 or まったく新しい記事
+    if (!localById || (remote.updatedAt ?? '') > (localById.updatedAt ?? '')) {
+      await saveDraft({ ...remote, updatedAt: remote.updatedAt })
       count++
     }
   }

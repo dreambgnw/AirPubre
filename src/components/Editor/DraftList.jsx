@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, PenLine, Clock, Globe, Upload, CheckCircle, Loader2 } from 'lucide-react'
-import { getDrafts, deleteDraft, getSiteConfig, saveDraft, getSyncCredential, addPendingDeletion, getPendingDeletions } from '../../lib/storage.js'
+import { X, PenLine, Clock, Globe, Upload, CheckCircle, Loader2, RefreshCw } from 'lucide-react'
+import { getDrafts, deleteDraft, getSiteConfig, saveDraft, getSyncCredential, addPendingDeletion, getPendingDeletions, deduplicateDrafts } from '../../lib/storage.js'
 import { buildSite, buildManifest } from '../../lib/builder.js'
-import { buildSyncFiles } from '../../lib/sync.js'
+import { buildSyncFiles, syncDraftsToGitHub } from '../../lib/sync.js'
 import { encryptSyncConfig } from '../../lib/crypto.js'
 import { deployToGitHub } from '../../lib/deploy/github.js'
 import { deployToVercel } from '../../lib/deploy/vercel.js'
@@ -430,14 +430,51 @@ export default function DraftList({ onOpen, refreshKey }) {
   const [showDeploy, setShowDeploy] = useState(false)
   const [pendingDeletionCount, setPendingDeletionCount] = useState(0)
 
+  // 同期専用プッシュ
+  const [syncing, setSyncing]     = useState(false)
+  const [syncMsg, setSyncMsg]     = useState(null)   // null | { ok: boolean, text: string }
+  const [canGitHubSync, setCanGitHubSync] = useState(false)
+
   useEffect(() => {
     setLoading(true)
-    getDrafts().then(d => {
-      setDrafts(d)
-      setLoading(false)
-    })
+    deduplicateDrafts()
+      .then(count => {
+        if (count > 0) setSyncMsg({ ok: true, text: `重複記事を ${count} 件自動削除しました（slug が同じで古い方）` })
+        return getDrafts()
+      })
+      .then(d => {
+        setDrafts(d)
+        setLoading(false)
+      })
     getPendingDeletions().then(p => setPendingDeletionCount(p.length))
+
+    // GitHub 同期ボタンの表示判定
+    Promise.all([getSiteConfig(), getSyncCredential()]).then(([cfg, cred]) => {
+      setCanGitHubSync(
+        !!cred && !!cfg.syncPassphrase &&
+        (cfg.deployTarget === 'github' || cfg.deployTarget === 'headless-github')
+      )
+    })
   }, [refreshKey, showDeploy])
+
+  const handleGitHubSync = async () => {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const [allDrafts, config, syncCred] = await Promise.all([
+        getDrafts(),
+        getSiteConfig(),
+        getSyncCredential(),
+      ])
+      await syncDraftsToGitHub(allDrafts, syncCred, config.syncPassphrase, config)
+      setSyncMsg({ ok: true, text: '同期データを GitHub に送信しました' })
+    } catch (e) {
+      setSyncMsg({ ok: false, text: e.message })
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 4000)
+    }
+  }
 
   const handleDelete = async (id, e) => {
     e.stopPropagation()
@@ -492,28 +529,58 @@ export default function DraftList({ onOpen, refreshKey }) {
 
       <div className="space-y-4">
         {/* ヘッダー行 */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-sm text-gray-400">
             {drafts.length} 件
             {publishedCount > 0 && (
               <span className="ml-2 text-emerald-500 font-medium">（掲載済み {publishedCount} 件）</span>
             )}
           </p>
-          {(publishedCount > 0 || pendingDeletionCount > 0) && (
-            <button
-              onClick={() => setShowDeploy(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white px-3 py-2 rounded-lg transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              サイトを更新
-              {pendingDeletionCount > 0 && (
-                <span className="ml-0.5 bg-rose-400 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">
-                  -{pendingDeletionCount}
-                </span>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* GitHub 同期専用ボタン（syncPassphrase + GitHub デプロイ設定済みのとき表示） */}
+            {canGitHubSync && (
+              <button
+                onClick={handleGitHubSync}
+                disabled={syncing}
+                title="フルデプロイなしで下書きデータだけ GitHub に同期"
+                className="flex items-center gap-1.5 text-xs font-semibold border border-sky-300 text-sky-600 hover:bg-sky-50 disabled:opacity-50 px-3 py-2 rounded-lg transition-colors"
+              >
+                {syncing
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <RefreshCw className="w-3.5 h-3.5" />}
+                下書きを同期
+              </button>
+            )}
+            {(publishedCount > 0 || pendingDeletionCount > 0) && (
+              <button
+                onClick={() => setShowDeploy(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white px-3 py-2 rounded-lg transition-colors"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                サイトを更新
+                {pendingDeletionCount > 0 && (
+                  <span className="ml-0.5 bg-rose-400 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">
+                    -{pendingDeletionCount}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* 同期結果トースト */}
+        {syncMsg && (
+          <div className={`text-xs px-3 py-2 rounded-lg flex items-center gap-2 ${
+            syncMsg.ok
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-red-50 text-red-600 border border-red-200'
+          }`}>
+            {syncMsg.ok
+              ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              : <X className="w-3.5 h-3.5 shrink-0" />}
+            {syncMsg.text}
+          </div>
+        )}
 
         {/* グリッド */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
